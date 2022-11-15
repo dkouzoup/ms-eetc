@@ -1,0 +1,10 @@
+{
+    "maxIterations": 500,
+    "numIntervals": 300,
+    "integrationMethod": "RK",
+    "integrationOptions": {
+        "order": 4,
+        "numSteps": 1,
+        "numApproxSteps": 1
+    }
+}
