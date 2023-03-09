@@ -68,7 +68,7 @@ def motorLossesFunction(train, detailedOutput=False):
     # update train parameters to match data
     train.powerMax = powerMax
     train.powerMin = -powerMax
-    train.forceMin = -forceMax
+    train.forceMin = -forceMax*(train.forceMin != 0)
     train.velocityMax = maxSpeed/3.6
 
     numMotors = 4
