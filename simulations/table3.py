@@ -33,7 +33,7 @@ if __name__ == '__main__':
     solverOpts['minimumVelocity'] = min(v0, vN)
 
     nRuns = 5
-    N_table = [50, 100, 200, 300, 400, 1000]
+    N_table = [50, 100, 200, 300, 400, 1000, 5000]
 
     iters = []
     intervals = []
