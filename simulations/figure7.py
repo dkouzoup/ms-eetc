@@ -4,7 +4,7 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
-from figure6 import runSimulation, plotThreeTrajectories
+from figure6 import runSimulation
 
 from utils import latexify, show, saveFig
 
@@ -89,9 +89,18 @@ def plotColormapZV(df_perfect, df_static, df_dynamic, train, figSize=None, filen
     ax[1].set_title('Regenerative braking')
     ax[1].set_ylim([1e-3*fMin, 0])
 
+    ax[1].set_ylabel('Force [kN]')
     ax[1].set_xlabel('Velocity [km/h]')
 
-    fig.colorbar(pcm1,ax=ax[1])
+    offset = 0.02
+    box = ax[1].get_position()
+    box.x0 = box.x0 + offset
+    box.x1 = box.x1 + offset
+    ax[1].set_position(box)
+
+    box = ax[1].get_position()
+    cb = fig.add_axes([box.x1 + 0.03, box.y0, 0.02, box.y1-box.y0])
+    fig.colorbar(pcm1,cax=cb)
 
     if figSize is not None:
 
