@@ -4,11 +4,9 @@ Open-source code for paper: "Direct Multiple Shooting for Computationally Effici
 
 - [Link to preprint](http://dx.doi.org/10.2139/ssrn.4264720)
 
-- Tag: 1.0
-
 # Installation
 
-## Set up a virtual environment
+## Setting up a virtual environment
 
 ### Windows
 
@@ -32,7 +30,7 @@ Open-source code for paper: "Direct Multiple Shooting for Computationally Effici
 
 - Open a terminal and activate the virtual environment (see instructions above)
 
-- Go to the `simulations` folder and run one of the scripts
+- Go to the `simulations` folder and run a script of your choice
 
     - Example: `python figure5.py` to generate Figure 5 of paper (`figure5.pdf`)
 
