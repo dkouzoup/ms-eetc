@@ -9,6 +9,10 @@ if __name__ == '__main__':
     actualLosses1 = df1b['Losses [kWh]'].sum()
     actualLosses2 = df2b['Losses [kWh]'].sum()
 
-    plotThreeTrajectories(df0, df1, df2, figSize=[8, 5], filename='figure8.pdf', \
-        withSpeedLimits=True, withAltitude=True, \
-        losses0=round(actualLosses0,1), losses1=round(actualLosses1,1), losses2=round(actualLosses2,1))
+    actualEnergy0 =  df0b['Energy [kWh]'].sum()
+    actualEnergy1 = df1b['Energy [kWh]'].sum()
+    actualEnergy2 = df2b['Energy [kWh]'].sum()
+
+    plotThreeTrajectories(df0, df1, df2, figSize=[8, 5], filename='figure8.pdf', withSpeedLimits=True, withAltitude=True, \
+        losses0=actualLosses0, losses1=actualLosses1, losses2=actualLosses2, \
+        energy0=actualEnergy0, energy1=actualEnergy1, energy2=actualEnergy2)

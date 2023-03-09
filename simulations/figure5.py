@@ -23,16 +23,18 @@ def plot(df0b_list, df1b_list, df2b_list, tp, figSize=None, filename=None):
         ii = 0 if indx in {0,1} else 1
         jj = 0 if indx in {0,2} else 1
 
+        energy0 = round(df0b_list[indx]['Energy [kWh]'].sum(),1)
         losses0 = round(df0b_list[indx]['Losses [kWh]'].sum(),1)
 
-        l0=ax[ii][jj].plot(df0b_list[indx]['Position [m]']*1e-3, df0b_list[indx]['Velocity [m/s]']*3.6, '-.', color='tab:blue', label='Perfect efficiency ({} kWh)'.format(losses0))
+        l0=ax[ii][jj].plot(df0b_list[indx]['Position [m]']*1e-3, df0b_list[indx]['Velocity [m/s]']*3.6, '-.', color='tab:blue', label='Perfect efficiency ({}/{} kWh)'.format(energy0, losses0))
         ax[ii][jj].plot(df0b_list[indx]['Position - cvodes [m]']*1e-3, df0b_list[indx]['Velocity - cvodes [m/s]']*3.6, '-.', color='tab:blue')
 
         if df1b_list is not None:
 
+            energy1 = round(df1b_list[indx]['Energy [kWh]'].sum(),1)
             losses1 = round(df1b_list[indx]['Losses [kWh]'].sum(),1)
 
-            l1=ax[ii][jj].plot(df1b_list[indx]['Position [m]']*1e-3, df1b_list[indx]['Velocity [m/s]']*3.6, '--', color='tab:red', label='Static efficiency ({} kWh)'.format(losses1))
+            l1=ax[ii][jj].plot(df1b_list[indx]['Position [m]']*1e-3, df1b_list[indx]['Velocity [m/s]']*3.6, '--', color='tab:red', label='Static efficiency ({}/{} kWh)'.format(energy1, losses1))
             ax[ii][jj].plot(df1b_list[indx]['Position - cvodes [m]']*1e-3, df1b_list[indx]['Velocity - cvodes [m/s]']*3.6, '--', color='tab:red')
 
         else:
@@ -41,9 +43,10 @@ def plot(df0b_list, df1b_list, df2b_list, tp, figSize=None, filename=None):
 
         if df2b_list is not None:
 
+            energy2 = round(df2b_list[indx]['Energy [kWh]'].sum(),1)
             losses2 = round(df2b_list[indx]['Losses [kWh]'].sum(),1)
 
-            l2=ax[ii][jj].plot(df2b_list[indx]['Position [m]']*1e-3, df2b_list[indx]['Velocity [m/s]']*3.6, '-', color='tab:green', label='Dynamic efficiency ({} kWh)'.format(losses2))
+            l2=ax[ii][jj].plot(df2b_list[indx]['Position [m]']*1e-3, df2b_list[indx]['Velocity [m/s]']*3.6, '-', color='tab:green', label='Dynamic efficiency ({}/{} kWh)'.format(energy2, losses2))
             ax[ii][jj].plot(df2b_list[indx]['Position - cvodes [m]']*1e-3, df2b_list[indx]['Velocity - cvodes [m/s]']*3.6, '-', color='tab:green')
 
         else:

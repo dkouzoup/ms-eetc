@@ -3,6 +3,7 @@ sys.path.append('..')
 
 import json
 
+import numpy as np
 import matplotlib.pyplot as plt
 
 from utils import postProcessDataFrame, latexify, show, saveFig
@@ -12,24 +13,41 @@ from ocp import casadiSolver
 from efficiency import totalLossesFunction
 
 
-def plotThreeTrajectories(df0, df1, df2, withSpeedLimits=False, withAltitude=False, figSize=None, filename=None, losses0=None, losses1=None, losses2=None):
+def plotThreeTrajectories(df0, df1, df2, withSpeedLimits=False, withAltitude=False, figSize=None, \
+    filename=None, losses0=None, losses1=None, losses2=None, energy0=None, energy1=None, energy2=None):
 
     latexify()
 
     fig, ax = plt.subplots(2, 1)
 
-    l0=ax[0].plot(df0['Position [m]']*1e-3, df0['Velocity [m/s]']*3.6, '-.', color='tab:blue', label='Perfect efficiency' + (' ({} kWh)'.format(losses0) if losses0 is not None else ''))
+    def formatLegend(txt, e, l):
+
+        withParenthesis = l is not None or e is not None
+
+        leg = txt + (' (' if withParenthesis else '')
+        leg += '{}'.format(round(e,1) if e is not None else '')
+        leg += '/' if e is not None  and l is not None else ''
+        leg += '{}'.format(round(l,1) if l is not None else '')
+        leg += ' kWh)' if withParenthesis else ''
+
+        return leg
+
+    l0=ax[0].plot(df0['Position [m]']*1e-3, df0['Velocity [m/s]']*3.6, '-.', color='tab:blue', label=formatLegend('Perfect efficiency', energy0, losses0))
     ax[0].plot(df0['Position - cvodes [m]']*1e-3, df0['Velocity - cvodes [m/s]']*3.6, '-.', color='tab:blue')
 
     if df1 is not None:
 
-        l1=ax[0].plot(df1['Position [m]']*1e-3, df1['Velocity [m/s]']*3.6, '--', color='tab:red', label='Static efficiency' + (' ({} kWh)'.format(losses1) if losses0 is not None else ''))
+        l1=ax[0].plot(df1['Position [m]']*1e-3, df1['Velocity [m/s]']*3.6, '--', color='tab:red', label=formatLegend('Static efficiency', energy1, losses1))
         ax[0].plot(df1['Position - cvodes [m]']*1e-3, df1['Velocity - cvodes [m/s]']*3.6, '--', color='tab:red')
 
     if df2 is not None:
 
-        l2=ax[0].plot(df2['Position [m]']*1e-3, df2['Velocity [m/s]']*3.6, '-', color='tab:green', label='Dynamic efficiency' + (' ({} kWh)'.format(losses2) if losses0 is not None else ''))
+        l2=ax[0].plot(df2['Position [m]']*1e-3, df2['Velocity [m/s]']*3.6, '-', color='tab:green', label=formatLegend('Dynamic efficiency', energy2, losses2))
         ax[0].plot(df2['Position - cvodes [m]']*1e-3, df2['Velocity - cvodes [m/s]']*3.6, '-', color='tab:green')
+
+    if withSpeedLimits and withAltitude:
+
+        le = ax[0].plot(np.NaN, np.NaN, '-', color='none', label=' ')  # phantom line to format legends properly
 
     if withSpeedLimits:
 
@@ -67,8 +85,8 @@ def plotThreeTrajectories(df0, df1, df2, withSpeedLimits=False, withAltitude=Fal
     ax[0].set_xlim([0, df0['Position [m]'].iloc[-1]*1e-3])
     ax[1].set_xlim([0, df0['Position [m]'].iloc[-1]*1e-3])
 
-    legends = l0 + (l1 if df1 is not None else []) + (l2 if df2 is not None else []) + (lv if withSpeedLimits else []) + (lg if withAltitude else [])
-    ax[0].legend(handles=legends, loc='lower center')
+    legends = l0 + (l1 if df1 is not None else []) + (l2 if df2 is not None else []) + (le if withSpeedLimits and withAltitude else []) + (lv if withSpeedLimits else []) + (lg if withAltitude else [])
+    ax[0].legend(handles=legends, loc='lower left', ncol=2 if withAltitude and withSpeedLimits else 1)
 
     if figSize is not None:
 
@@ -81,13 +99,24 @@ def plotThreeTrajectories(df0, df1, df2, withSpeedLimits=False, withAltitude=Fal
     show()
 
 
-def runSimulation(trackID='RefSpeed100', nRuns=1):
+def runSimulation(trackID='RefSpeed100', nRuns=1, brakeType='rg'):
 
     v0 = 1
     vN = 1
 
     train = Train(train='Intercity')
-    train.forceMinPn = 0
+
+    if brakeType == 'rg':
+
+        train.forceMinPn = 0
+
+    elif brakeType == 'pn':
+
+        train.forceMin = 0
+
+    else:
+
+        raise ValueError("Unknown brake type!")
 
     etaMax = 0.73
 
@@ -186,6 +215,10 @@ if __name__ == '__main__':
     actualLosses1 = df1b['Losses [kWh]'].sum()
     actualLosses2 = df2b['Losses [kWh]'].sum()
 
-    plotThreeTrajectories(df0, df1, df2, figSize=[8, 5], filename='figure6.pdf', \
-        withSpeedLimits=False, withAltitude=False, \
-        losses0=round(actualLosses0,1), losses1=round(actualLosses1,1), losses2=round(actualLosses2,1))
+    actualEnergy0 =  df0b['Energy [kWh]'].sum()
+    actualEnergy1 = df1b['Energy [kWh]'].sum()
+    actualEnergy2 = df2b['Energy [kWh]'].sum()
+
+    plotThreeTrajectories(df0, df1, df2, figSize=[8, 5], filename='figure6.pdf', withSpeedLimits=False, withAltitude=False, \
+        losses0=actualLosses0, losses1=actualLosses1, losses2=actualLosses2, \
+        energy0=actualEnergy0, energy1=actualEnergy1, energy2=actualEnergy2)
