@@ -6,55 +6,103 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils import latexify, show, saveFig
-from train import Train
-from efficiency import motorLossesFunction, loadToForce
+from efficiency import loadToForce, totalLossesFunction
 
 
-def plotSplines(train, data):
+def plotSpline(loads, velocities, splineFun, forceMax, powerMax, axObj=None, type='3d'):
 
-    latexFound = latexify()
+    loads3D, velocities3D = np.meshgrid(loads, velocities, indexing='ij')
 
-    dfA = data['dfA']
-    dfB = data['dfB']
-    fun = data['fun']
+    forces3D = loadToForce(loads3D, velocities3D, forceMax, powerMax)
 
-    fig, ax = plt.subplots(1, 1)
+    losses3D = np.zeros(loads3D.shape)
 
-    for l in dfA.keys():
+    rows, cols = losses3D.shape
 
-        l1 = ax.plot(dfA.index*3.6, dfA[l]*1e-3, ':o', color='tab:blue', fillstyle='none', label='Measurements, configuration A')
-        l2 = ax.plot(dfB.index*3.6, dfB[l]*1e-3, ':x', color='tab:red', fillstyle='none', label='Measurements, configuration B')
+    for ii in range(rows):
 
-    velHighRes = np.linspace(dfA.index[0], dfA.index[-1], 200)
+        for jj in range(cols):
 
-    loadHighRes = [0, 25, 50, 75, 90, 100]
-    posText = [20, 60, 84, 117, 143, 168]
+            losses3D[ii,jj] = splineFun(forces3D[ii,jj], velocities3D[ii,jj])
 
-    for l,p in zip(loadHighRes, posText):
+    if axObj is None:
 
-        l3 = ax.plot(velHighRes*3.6, np.array([fun(loadToForce(l, v, train.forceMax, train.powerMax), v) for v in velHighRes])*1e-3, '-', color='tab:green', label='Spline fit, minimum losses')
+        axObj = plt.axes(projection='3d')
 
-        percentSymbol = '\%' if latexFound else '%'
-        ax.text(140, p, r'{}{} load'.format(l, percentSymbol), fontsize=10)
+    if type == '3d':
 
-    ax.set_ylabel('Power losses [kW]')
-    ax.set_xlabel('Velocity [km/h]')
+        handle = axObj.plot_surface(1e-3*forces3D, velocities3D*3.6, 1e-3*losses3D, rstride=1, cstride=1, cmap='viridis', edgecolor='none')
+        axObj.set_zlabel('Losses [kW]')
+        axObj.set_xlabel('Force [kN]')
+        axObj.set_ylabel('Velocity [km/h]')
 
-    ax.grid(visible=True)
+    elif type == 'heatmap':
 
-    ax.set_title('Losses of converters and motors')
-    ax.legend(handles=l1+l2+l3, loc='upper center')
+        handle = axObj.contourf(velocities3D*3.6, 1e-3*forces3D, 1e-3*losses3D)
+        axObj.set_xlabel('Velocity [km/h]')
+        axObj.set_ylabel('Force [kN]')
+        axObj.set_title('Losses [kW]')
 
-    fig.set_size_inches(7, 5)
+    else:
+
+        raise ValueError("Unknown type!")
+
+    if axObj is None:
+
+        show()
+
+    return np.amax(losses3D), handle
+
+
+def plotSplines(loads, velocities, splineFun1, splineFun2, forceMax, powerMax, plotEta=False, figSize=None, filename=None):
+
+    latexify()
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(2,2,1)
+    ax2 = fig.add_subplot(2,2,2)
+    ax3 = fig.add_subplot(2,2,3,projection='3d')
+    ax4 = fig.add_subplot(2,2,4,projection='3d')
+
+    lossesMax1, h1 = plotSpline(loads, velocities, splineFun1, forceMax, powerMax, axObj=ax1, type='heatmap')
+    lossesMax2, h2 = plotSpline(loads, velocities, splineFun2, forceMax, powerMax, axObj=ax2, type='heatmap')
+    plotSpline(loads, velocities, splineFun1, forceMax, powerMax, axObj=ax3, type='3d')
+    plotSpline(loads, velocities, splineFun2, forceMax, powerMax, axObj=ax4, type='3d')
+
+    if figSize is not None:
+
+        fig.set_size_inches(figSize[0], figSize[1])
+
     fig.tight_layout()
 
-    saveFig(fig, ax, 'figure3.pdf')
+    # move colorbar next to ax2
+    box = ax2.get_position()
+    cb = fig.add_axes([box.x1 + 0.03, box.y0, 0.02, box.y1-box.y0])
+    fig.colorbar(h2,cax=cb)
+
+    saveFig(fig, [ax1, ax2], filename)
+
     show()
+
+    return lossesMax1, lossesMax2
 
 
 if __name__ == '__main__':
 
-    train = Train(train='Intercity')
-    data = motorLossesFunction(train, detailedOutput=True)
+    from train import Train
 
-    plotSplines(train, data)
+    train = Train(train='Intercity')
+
+    fun1 = lambda f,v: f*v*(f>0)*(1 - etaMax)/etaMax - (1-etaMax)*f*v*(f<0)
+    fun2 = totalLossesFunction(train, auxiliaries=27000, etaGear=0.96)
+
+    loadsEval = np.linspace(-100, 100, 200)
+    velocitiesEval = np.linspace(1, 170, 170)/3.6
+
+    etaMax = 0.73
+
+    lossesMax1, lossesMax2 = plotSplines(loadsEval, velocitiesEval, fun1, fun2, train.forceMax, train.powerMax, figSize=[8, 7], filename='figure3.pdf')
+
+    if not 0.99 <= lossesMax1/lossesMax2 <= 1.01:
+
+        raise ValueError("Losses not close enough, tune etaMax!")
