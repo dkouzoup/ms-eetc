@@ -59,19 +59,19 @@ class OptionsCasadiSolver(Options):
 
         if not isinstance(self.energyOptimal, bool):
 
-            raise OptionError("'energyOptimal' flag must be a boolean!")
+            raise ValueError("'energyOptimal' flag must be a boolean!")  # TODO: fix in master!
 
         if type(self.minimumVelocity) not in {int, float} or self.minimumVelocity <= 0:
 
-            raise OptionError("Minimum velocity should be a strictly positive number!")
+            raise ValueError("Minimum velocity should be a strictly positive number!")
 
         if self.integrationMethod not in {'RK', 'IRK', 'CVODES'}:
 
-            raise OptionError("Unknown integration method!")
+            raise ValueError("Unknown integration method!")
 
         if not isinstance(self.integrateLosses, bool):
 
-            raise OptionError("'integrateLosses' flag must be a boolean!")
+            raise ValueError("'integrateLosses' flag must be a boolean!")
 
 
 class casadiSolver():
