@@ -109,7 +109,7 @@ class Track():
 
         self.length = data['length']  # track length [m]
 
-        self.importGradientTuples(data['gradients'])  # gradients [promil]
+        self.importGradientTuples(data['gradients'])  # gradients [permil]
 
         self.importSpeedLimitTuples(data['speedLimits'])  # speed limits [m/s]
 
@@ -160,7 +160,7 @@ class Track():
 
             raise ValueError("Cannot import gradients without a valid track length!")
 
-        self.gradients = importTuples(tuples, 'Position [m]', 'Gradient [promil]')
+        self.gradients = importTuples(tuples, 'Position [m]', 'Gradient [permil]')
 
         checkDataFrame(self.gradients, self.length)
 
@@ -188,7 +188,7 @@ class Track():
 
             raise ValueError("CSV file should have two columns (position in m and gradient in specified unit)!")
 
-        grad.rename(columns={grad.columns[0]:'Position [m]', grad.columns[1]: 'Gradient [promil]'}, inplace=True)
+        grad.rename(columns={grad.columns[0]:'Position [m]', grad.columns[1]: 'Gradient [permil]'}, inplace=True)
 
         self.gradients = grad.set_index(grad.columns[0])
 

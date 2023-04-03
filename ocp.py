@@ -202,7 +202,7 @@ class casadiSolver():
                     lbg += [-abs(lowerBound)]*2
 
                 # gradient of current index
-                grad = self.points.iloc[i]['Gradient [promil]']/1e3
+                grad = self.points.iloc[i]['Gradient [permil]']/1e3
 
                 # acceleration constraints
                 g += [trainModel.accelerationFun(ca.vertcat(time[i], velSq[i]), ca.vcat(u), grad)]

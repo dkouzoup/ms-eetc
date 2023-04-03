@@ -170,7 +170,7 @@ def simulateCVODES(dfIn, model, totalMass, accumulatedErrors=True):
         pos = posCVODES[-1] if accumulatedErrors else dfIn['Position [m]'].iloc[ii]
         vel = velCVODES[-1] if accumulatedErrors else dfIn['Velocity [m/s]'].iloc[ii]
 
-        posNxt, velNxt = ivp.solve(tf=dt, f=dfIn['Force [N]'].iloc[ii]/totalMass, grd=dfIn['Gradient [promil]'].iloc[ii]/1e3, v0=vel, s0=pos)
+        posNxt, velNxt = ivp.solve(tf=dt, f=dfIn['Force [N]'].iloc[ii]/totalMass, grd=dfIn['Gradient [permil]'].iloc[ii]/1e3, v0=vel, s0=pos)
 
         posCVODES += [posNxt]
         velCVODES += [velNxt]
@@ -220,7 +220,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
     dfOut = dfIn.copy()
 
     dfOut['Speed limit [m/s]'] = points['Speed limit [m/s]'].values
-    dfOut['Gradient [promil]'] = points['Gradient [promil]'].values
+    dfOut['Gradient [permil]'] = points['Gradient [permil]'].values
     dfOut['Force (acc) [N]'] = dfOut['Force (el) [N]']*(dfOut['Force (el) [N]'] >= 0)
     dfOut['Force (rgb) [N]'] = dfOut['Force (el) [N]']*(dfOut['Force (el) [N]'] < 0)
     dfOut['Force [N]'] = dfOut['Force (acc) [N]'] + dfOut['Force (rgb) [N]'] + dfOut['Force (pnb) [N]']
@@ -264,7 +264,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
         vs = dfOut['Velocity [m/s]'].values.tolist()
         fs = (dfOut['Force (el) [N]']/totalMass).values.tolist()
         ps = (dfOut['Force (pnb) [N]']/totalMass).values.tolist()
-        gs = (dfOut['Gradient [promil]']/1e3).values.tolist()
+        gs = (dfOut['Gradient [permil]']/1e3).values.tolist()
 
         losses = []
 
@@ -296,7 +296,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
         vs = dfOut['Velocity [m/s]'].values.tolist()
         fs = (dfOut['Force (acc) [N]']/totalMass).values.tolist()
         ps = (dfOut['Force (pnb) [N]']/totalMass).values.tolist()
-        gs = (dfOut['Gradient [promil]']/1e3).values.tolist()
+        gs = (dfOut['Gradient [permil]']/1e3).values.tolist()
 
         rr = []
 
@@ -314,7 +314,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
 
     # instantaneous specific forces
     rollingResistance = dfOut['Velocity [m/s]'].apply(rrFun)
-    gradientResistance = train.g*(dfOut['Gradient [promil]']/1000)/train.rho
+    gradientResistance = train.g*(dfOut['Gradient [permil]']/1000)/train.rho
 
     dfOut['Acceleration [m/s^2]'] = dfOut['Force [N]']/totalMass - rollingResistance - gradientResistance
 

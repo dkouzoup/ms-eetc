@@ -1,4 +1,4 @@
-position [m],gradient [promil],speed limit [m/s]
+position [m],gradient [permil],speed limit [m/s]
 0.0,11.9,25.0
 49.6,11.9,27.77777777777778
 125.6,11.9,30.555555555555554

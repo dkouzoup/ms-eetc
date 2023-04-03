@@ -59,7 +59,7 @@ def plotThreeTrajectories(df0, df1, df2, withSpeedLimits=False, withAltitude=Fal
 
         axr = ax[0].twinx()
 
-        gradients = df0.set_index('Position [m]')['Gradient [promil]']
+        gradients = df0.set_index('Position [m]')['Gradient [permil]']
         altitude = computeAltitude(gradients.iloc[:-1], gradients.index[-1])
         altitude -= altitude.min()[0]
 
