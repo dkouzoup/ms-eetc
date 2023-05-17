@@ -4,6 +4,7 @@ sys.path.append('..')
 import numpy as np
 
 import matplotlib.pyplot as plt
+from matplotlib.transforms import Bbox
 
 from utils import latexify, show, saveFig
 from efficiency import loadToForce, totalLossesFunction
@@ -74,6 +75,15 @@ def plotSplines(loads, velocities, splineFun1, splineFun2, forceMax, powerMax, p
         fig.set_size_inches(figSize[0], figSize[1])
 
     fig.tight_layout()
+
+    width=0.34
+    height=0.34
+    boxOld = ax1.get_position()
+    boxNew = Bbox.from_bounds(boxOld.x0+0.05, boxOld.y0, width, height)
+    ax1.set_position(boxNew)
+    boxOld = ax2.get_position()
+    boxNew = Bbox.from_bounds(boxOld.x0, boxOld.y0, width, height)
+    ax2.set_position(boxNew)
 
     # move colorbar next to ax2
     box = ax2.get_position()
