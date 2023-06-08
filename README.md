@@ -2,7 +2,7 @@
 
 Open-source code for paper: "Direct Multiple Shooting for Computationally Efficient Train Trajectory Optimization"
 
-- [Link to preprint](http://dx.doi.org/10.2139/ssrn.4264720)
+- [Link to publication](https://www.sciencedirect.com/science/article/pii/S0968090X23001596)
 
 # Installation
 
