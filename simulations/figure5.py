@@ -108,8 +108,8 @@ if __name__ == '__main__':
 
         tripTime = minimumTime*(1 + tp/100)
 
-        track = Track(track='RefSpeed100', tUpper=tripTime)
-        track.truncate(8500)
+        track = Track(config={'id':'00_var_speed_limit_100'}, tUpper=tripTime, pathJSON='../tracks')
+        track.updateLimits(positionEnd=8500)
 
         with open('config.json') as file:
 

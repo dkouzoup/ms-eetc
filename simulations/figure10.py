@@ -20,7 +20,7 @@ train.powerLosses = lambda f,v: f*v*(f>0)*(1 - etaMax)/etaMax - (1-etaMax)*f*v*(
 
 train.forceMinPn = 0
 
-track = Track(track='RefSpeed100', tUpper=1541)
+track = Track(config={'id':'00_var_speed_limit_100'}, tUpper=1541, pathJSON='../tracks')
 
 with open('config.json') as file:
 
@@ -45,10 +45,10 @@ time_dms = round(min(cpuTimes),2)
 
 # load GPOPS-II results
 
-df_gpops1 = pd.read_csv('../gpops/'+ track.title + 'GPOPSI.csv')
+df_gpops1 = pd.read_csv('../gpops/'+ track.title + '_GPOPSI.csv')
 df_gpops1.set_index('Time [s]', inplace=True)
 df_gpops1.drop_duplicates(subset='Position [m]', inplace=True)
-df_gpops2 = pd.read_csv('../gpops/'+ track.title + 'GPOPSII.csv')
+df_gpops2 = pd.read_csv('../gpops/'+ track.title + '_GPOPSII.csv')
 df_gpops2.set_index('Time [s]', inplace=True)
 df_gpops2.drop_duplicates(subset='Position [m]', inplace=True)
 

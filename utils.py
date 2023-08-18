@@ -125,7 +125,8 @@ class IVP():
         acceleration = f - rollingResistance - model.g*gd*(1/model.rho)
 
         ode = ca.vertcat(dt*v, dt*acceleration, dt*lossesFun(f*m, v)/m if lossesFun is not None else [])
-        self.fun = ca.integrator('integrator', 'cvodes', {'x':ca.vertcat(s,v,e), 'p':ca.vertcat(f,gd,dt,m), 'ode':ode}, {'tf':1, 'abstol':1e-12, 'reltol':1e-14})
+        t0, tf = 0, 1
+        self.fun = ca.integrator('integrator', 'cvodes', {'x':ca.vertcat(s,v,e), 'p':ca.vertcat(f,gd,dt,m), 'ode':ode}, t0, tf, {'abstol':1e-12, 'reltol':1e-14})
         self.withLosses = lossesFun is not None
 
 

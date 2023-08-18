@@ -416,7 +416,7 @@ if __name__ == '__main__':
     etaRgBrake = 0.9
     train.powerLosses = lambda f,v: f*v*(f>0)*(1 - etaTraction)/(etaTraction) - (1-etaRgBrake)*f*v*(f<0)
 
-    track = Track(track='RefSpeed100', tUpper=1541)
+    track = Track(config={'id':'00_var_speed_limit_100'}, tUpper=1541)
 
     opts = {'numIntervals':200, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
 

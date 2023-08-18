@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     train.powerLosses = fun
 
-    track = Track(track='RefSpeed100', tUpper=1541)
+    track = Track(config={'id':'00_var_speed_limit_100'}, tUpper=1541, pathJSON='../tracks')
 
     with open('config.json') as file:
 

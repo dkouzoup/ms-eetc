@@ -1,0 +1,51 @@
+{
+    "metadata": {
+        "id": "00_var_speed_limit_100",
+        "created by": "Dimitris Kouzoupis",
+        "library version": "1.1",
+        "license": "This file is part of TTOBench (BSD 2-Clause License)"
+    },
+    "altitude": {
+        "unit": "m",
+        "value": 0
+    },
+    "stops": {
+        "unit": "m",
+        "values": [
+            0.0,
+            48531.0
+        ]
+    },
+    "speed limits": {
+        "units": {
+            "position": "m",
+            "velocity": "km/h"
+        },
+        "values": [
+            [
+                0.0,
+                140
+            ],
+            [
+                25000.0,
+                100
+            ],
+            [
+                35000.0,
+                140
+            ]
+        ]
+    },
+    "gradients": {
+        "units": {
+            "position": "m",
+            "slope": "permil"
+        },
+        "values": [
+            [
+                0.0,
+                0.0
+            ]
+        ]
+    }
+}

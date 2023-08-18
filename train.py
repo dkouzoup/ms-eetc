@@ -235,7 +235,8 @@ class TrainIntegrator():
 
             states = model.states
 
-            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':model.states, 'p':params, 'ode':model.ode}, {'tf':1, 'abstol':opts.absTol, 'reltol':opts.relTol})
+            t0, tf = 0, 1
+            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':model.states, 'p':params, 'ode':model.ode}, t0, tf, {'abstol':opts.absTol, 'reltol':opts.relTol})
 
             self.eval = lambda x, p, dummy: cvodesFun(x0=x, p=p)['xf']
 
@@ -310,7 +311,8 @@ class TrainIntegrator():
 
         elif solver == 'CVODES':
 
-            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':x, 'p':p, 'ode':dt*xdot}, {'tf':1, 'abstol':1e-8, 'reltol':1e-6})
+            t0, tf = 0, 1
+            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':x, 'p':p, 'ode':dt*xdot}, t0, tf, {'abstol':1e-8, 'reltol':1e-6})
 
             self.lossesIntegrator = lambda x, p, dt: cvodesFun(x0=x, p=ca.vertcat(p, dt))['xf']
 
@@ -350,7 +352,8 @@ class TrainIntegrator():
 
         elif solver == 'CVODES':
 
-            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':x, 'p':p, 'ode':ds*xdot}, {'tf':1, 'abstol':1e-8, 'reltol':1e-6})
+            t0, tf = 0, 1
+            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':x, 'p':p, 'ode':ds*xdot}, t0, tf, {'abstol':1e-8, 'reltol':1e-6})
 
             self.rollingResistanceIntegrator = lambda x, p, ds: cvodesFun(x0=x, p=ca.vertcat(p, ds))['xf']
 

@@ -99,7 +99,7 @@ def plotThreeTrajectories(df0, df1, df2, withSpeedLimits=False, withAltitude=Fal
     show()
 
 
-def runSimulation(trackID='RefSpeed100', nRuns=1, brakeType='rg'):
+def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     v0 = 1
     vN = 1
@@ -124,8 +124,8 @@ def runSimulation(trackID='RefSpeed100', nRuns=1, brakeType='rg'):
     fun1 = lambda f,v: f*v*(f>0)*(1 - etaMax)/etaMax - (1-etaMax)*f*v*(f<0)
     fun2 = totalLossesFunction(train, auxiliaries=27000, etaGear=0.96)
 
-    tUpper = 1541 if trackID == 'RefSpeed100' else 1242
-    track = Track(track=trackID, tUpper=tUpper)
+    tUpper = 1541 if trackID == '00_var_speed_limit_100' else 1242
+    track = Track(config={'id':trackID}, tUpper=tUpper, pathJSON='../tracks')
 
     with open('config.json') as file:
 

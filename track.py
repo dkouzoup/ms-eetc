@@ -1,7 +1,10 @@
+import os
+import json
 import numpy as np
 import pandas as pd
 
-from data import dataSwissTrack, dataRefSpeed100Track
+import matplotlib.pyplot as plt
+
 
 def importTuples(tuples, xLabel, yLabels):
     """
@@ -42,7 +45,34 @@ def importTuples(tuples, xLabel, yLabels):
     return df
 
 
+def convertUnit(value, unit):
+    """
+    Convert from any known unit to internally used unit.
+    """
+
+    if unit in {'m', 'm/s', 'permil'}:
+
+        pass
+
+    elif unit == 'km':
+
+        value /= 1000
+
+    elif unit == 'km/h':
+
+        value /= 3.6
+
+    else:
+
+        raise ValueError("Unknown unit!")
+
+    return value
+
+
 def checkDataFrame(df, trackLength):
+    """
+    Check validity of initial and end position in pandas dataframe.
+    """
 
     if df.index[0] != 0:
 
@@ -55,27 +85,31 @@ def checkDataFrame(df, trackLength):
     return True
 
 
-def computeAltitude(gradients, length):
+def computeAltitude(gradients, length, altitudeStart=0):
+    """
+    Calculate altitude profile from gradients.
+    """
 
     position = np.append(gradients.index.values, length)
-    altitude = np.array([0])
+    altitude = np.array([altitudeStart])
 
     for ii in range(1, len(gradients)+1):
 
-        gradient = gradients.iloc[ii-1][0] if isinstance(gradients, pd.DataFrame) else gradients.iloc[ii-1]
         posStart = gradients.index[ii-1]
         posEnd = gradients.index[ii] if ii < len(gradients) else length
+        gradient = gradients.iloc[ii-1][0] if isinstance(gradients, pd.DataFrame) else gradients.iloc[ii-1]
         height = (posEnd - posStart)*(gradient/1e3)
         altitude = np.append(altitude, altitude[-1] + height)
 
-    altitude += abs(min(altitude))  # lowest point is 0 m
     df = pd.DataFrame({gradients.index.name:position, 'Altitude [m]':altitude}).set_index(gradients.index.name)
 
     return df
 
 
 def computeDiscretizationPoints(track, numIntervals):
-    "Compute the space discretization points based on track characteristics and horizon length."
+    """
+    Compute the space discretization points based on track characteristics and horizon length.
+    """
 
     df1 = track.mergeDataFrames()
 
@@ -93,29 +127,50 @@ def computeDiscretizationPoints(track, numIntervals):
 
 class Track():
 
-    def __init__(self, track='RefSpeed100', tUpper=None):
-
-        if track == 'RefSpeed100':
-
-            data = dataRefSpeed100Track()
-
-        elif track == 'Swiss':
-
-            data = dataSwissTrack()
-
-        else:
-
-            raise ValueError("Unknown track specified!")
-
-        self.length = data['length']  # track length [m]
-
-        self.importGradientTuples(data['gradients'])  # gradients [permil]
-
-        self.importSpeedLimitTuples(data['speedLimits'])  # speed limits [m/s]
+    def __init__(self, config, tUpper=None, pathJSON='tracks'):
+        """
+        Constructor of Track objects.
+        """
 
         self.tUpper = tUpper  # maximum travel time [s] (minimum time + reserve)
 
-        self.title = track
+        if not isinstance(config, dict):
+
+            raise ValueError("Track configuration should be provided as a dictionary!")
+
+        if 'id' not in config:
+
+            raise ValueError("Track ID must be specified in configuration!")
+
+        filename = os.path.join(pathJSON, config['id']+'.json')
+
+        with open(filename) as file:
+
+            data = json.load(file)
+
+        self.length = convertUnit(data['stops']['values'][-1], data['stops']['unit'])
+        self.altitude = convertUnit(data['altitude']['value'], data['altitude']['unit']) if 'altitude' in data else 0
+        self.title = data['metadata']['id']
+
+        self.importSpeedLimitTuples(data['speed limits']['values'], data['speed limits']['units']['velocity'])
+        self.importGradientTuples(data['gradients']['values'], data['gradients']['units']['slope'])
+
+        numStops = len(data['stops']['values'])
+        indxDeparture = config['from'] if 'from' in config else 0
+        indxDestination = config['to'] if 'to' in config else numStops-1
+
+        if not 0 <= indxDeparture < numStops - 1:
+
+            raise ValueError("Index of departure is out of bounds!")
+
+        if not indxDeparture < indxDestination < numStops:
+
+            raise ValueError("Index of destination is out of bounds!")
+
+        posDeparture = convertUnit(data['stops']['values'][indxDeparture], data['stops']['unit'])
+        posDestination = convertUnit(data['stops']['values'][indxDestination], data['stops']['unit'])
+
+        self.updateLimits(posDeparture, posDestination)
 
         self.checkFields()
 
@@ -141,7 +196,11 @@ class Track():
 
             raise ValueError("Track length must be a strictly positive number, not {}!".format(self.length))
 
-        if self.tUpper is not None and (self.tUpper <= 0 or np.isinf(self.tUpper)):
+        if self.altitude is None or np.isinf(self.altitude):
+
+            raise ValueError("Altitude must be a number, not {}!".format(self.altitude))
+
+        if self.tUpper is None or self.tUpper <= 0 or np.isinf(self.tUpper):
 
             raise ValueError("Maximum trip time must be a strictly positive number, not {}!".format(self.tUpper))
 
@@ -154,62 +213,33 @@ class Track():
             raise ValueError("Issue with track speed limits!")
 
 
-    def importGradientTuples(self, tuples):
+    def importGradientTuples(self, tuples, unit='permil'):
 
         if not self.lengthOk():
 
             raise ValueError("Cannot import gradients without a valid track length!")
+
+        if unit not in {'permil'}:
+
+            raise ValueError("Specified gradient unit not supported!")
 
         self.gradients = importTuples(tuples, 'Position [m]', 'Gradient [permil]')
 
         checkDataFrame(self.gradients, self.length)
 
 
-    def importSpeedLimitTuples(self, tuples):
+    def importSpeedLimitTuples(self, tuples, unit='km/h'):
 
         if not self.lengthOk():
 
             raise ValueError("Cannot import speed limits without a valid track length!")
 
+        if unit not in {'km/h', 'm/s'}:
+
+            raise ValueError("Specified speed unit not supported!")
+
+        tuples = [(p, convertUnit(v, unit)) for p,v in tuples]
         self.speedLimits = importTuples(tuples, 'Position [m]', 'Speed limit [m/s]')
-
-        checkDataFrame(self.speedLimits, self.length)
-
-
-    def importGradientCsv(self, filename):
-
-        if not self.lengthOk():
-
-            raise ValueError("Cannot import gradients without a valid track length!")
-
-        grad = pd.read_csv(filename)
-
-        if len(grad.columns) != 2:
-
-            raise ValueError("CSV file should have two columns (position in m and gradient in specified unit)!")
-
-        grad.rename(columns={grad.columns[0]:'Position [m]', grad.columns[1]: 'Gradient [permil]'}, inplace=True)
-
-        self.gradients = grad.set_index(grad.columns[0])
-
-        checkDataFrame(self.gradients, self.length)
-
-
-    def importSpeedLimitCsv(self, filename):
-
-        if not self.lengthOk():
-
-            raise ValueError("Cannot import speed limits without a valid track length!")
-
-        speedLimits = pd.read_csv(filename)
-
-        if len(speedLimits.columns) != 2:
-
-            raise ValueError("CSV file should have two columns (position in m and velocity in specified unit)!")
-
-        speedLimits.rename(columns={speedLimits.columns[0]:'Position [m]', speedLimits.columns[1]:'Speed limit [m/s]'}, inplace=True)
-
-        self.speedLimits = speedLimits.set_index(speedLimits.columns[0])
 
         checkDataFrame(self.speedLimits, self.length)
 
@@ -240,18 +270,26 @@ class Track():
 
 
     def mergeDataFrames(self):
-        "Dataframe with intervals of constant gradient and speed limit."
+        """
+        Build dataframe with intervals of constant gradient and speed limit.
+        """
 
         return self.gradients.join(self.speedLimits, how='outer').fillna(method='ffill')
 
 
     def print(self):
+        """
+        Basic printing functionality.
+        """
 
         df = self.mergeDataFrames()
         print(df)
 
 
     def plot(self, figSize=[12, 6]):
+        """
+        Basic plotting functionality.
+        """
 
         speedLimits = self.speedLimits
         speedLimits = pd.concat([speedLimits, pd.DataFrame({speedLimits.index.name:[self.length], speedLimits.keys()[0]:[None]}).set_index(speedLimits.index.name)])
@@ -271,26 +309,36 @@ class Track():
         axA = altitude.plot(ax=axA, color='gray', title='Visualization of ' + self.title + ' track', grid=True, ylabel='Altitude [m]')
         axA.legend(loc='upper right')
 
+        plt.show()
 
-    def truncate(self, length=None):
-        "Reduce length of track."
 
-        if length == None:
+    def updateLimits(self, positionStart=None, positionEnd=None, unit='m'):
+        """
+        Truncate track to given positions.
+        """
 
-            return
+        positionStart = 0 if positionStart is None else positionStart
+        positionEnd = self.length if positionEnd is None else positionEnd
 
-        if (not 0 < length <= self.length) :
+        if (not 0 <= positionStart < self.length) or (not 0 < positionEnd <= self.length) :
 
-            raise ValueError("New length must be smaller than current length!")
+            raise ValueError("Given positions must be between limits of track!")
+
+        positionStart = convertUnit(positionStart, unit)
+        positionEnd = convertUnit(positionEnd, unit)
+
+        newPos = pd.DataFrame({'Position [m]':[positionStart]}).set_index('Position [m]')
 
         def crop(dfIn):
 
-            dfOut = dfIn.copy()
-            dfOut = dfOut.loc[dfOut.index < length]
+            dfOut = newPos.join(dfIn, how='outer').ffill()
+            dfOut = dfOut.loc[(dfOut.index >= positionStart)&(dfOut.index <= positionEnd)]
+            dfOut['Position [m]'] = dfOut.index - dfOut.index[0]
+            dfOut.set_index('Position [m]', inplace=True)
 
             return dfOut
 
-        self.length = length
+        self.length -= positionStart + (self.length - positionEnd)
 
         self.speedLimits = crop(self.speedLimits)
         self.gradients = crop(self.gradients)
@@ -298,11 +346,7 @@ class Track():
 
 if __name__ == '__main__':
 
-    import matplotlib.pyplot as plt
-
     # Example on how to load and plot a track
 
-    track = Track(track='Swiss')
+    track = Track(config={'id':'00_stationX_stationY'}, tUpper=1300)
     track.plot()
-
-    plt.show()

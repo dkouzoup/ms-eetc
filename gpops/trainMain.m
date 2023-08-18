@@ -45,67 +45,67 @@ withPnBrake = minForcePn ~= 0;
 %----------------------------- Track specs  ------------------------------%
 %-------------------------------------------------------------------------%
 
-trackID = 'RefSpeed100';
+trackID = '00_var_speed_limit_100';
 
 track.length = 48531.0;
 track.time = 1541;
 
 switch trackID
 
-    case 'Ref'
+    case '00_reference'
 
         track.phases = 0;
         track.gradients = 0;
         track.speedLimits = 140/3.6;
 
-    case 'RefSpeed120'
+    case '00_var_speed_limit_120'
 
         track.phases = [0, 25000, 35000];
         track.gradients = [0, 0, 0];
         track.speedLimits = [140, 120, 140]./3.6;
 
-    case 'RefSpeed110'
+    case '00_var_speed_limit_110'
 
         track.phases = [0, 25000, 35000];
         track.gradients = [0, 0, 0];
         track.speedLimits = [140, 110, 140]./3.6;
 
-    case 'RefSpeed100'
+    case '00_var_speed_limit_100'
 
         track.phases = [0, 25000, 35000];
         track.gradients = [0, 0, 0];
         track.speedLimits = [140, 100, 140]./3.6;
 
-    case 'RefGradMinus10'
+    case '00_var_gradient_minus_10'
 
         track.phases = [0, 25000, 35000];
         track.gradients = [0, -10, 0];
         track.speedLimits = [140, 140, 140]./3.6;
 
-   case 'RefGradMinus5'
+   case '00_var_gradient_minus_5'
 
         track.phases = [0, 25000, 35000];
         track.gradients = [0, -5, 0];
         track.speedLimits = [140, 140, 140]./3.6;
 
-    case 'RefGradPlus5'
+    case '00_var_gradient_plus_5'
 
         track.phases = [0, 25000, 35000];
         track.gradients = [0, 5, 0];
         track.speedLimits = [140, 140, 140]./3.6;
 
-    case 'RefGradPlus10'
+    case '00_var_gradient_plus_10'
 
         track.phases = [0, 25000, 35000];
         track.gradients = [0, 10, 0];
         track.speedLimits = [140, 140, 140]./3.6;
 
-    case 'Swiss'
+    case '00_stationX_stationY'
 
         track.length = 29556.1;
         track.time = 1242;
 
-        data = csvread('CH.csv', 1, 0);
+        data = csvread('00_stationX_stationY.csv', 1, 0);
         track.phases = data(:,1)';
         track.gradients = data(:,2)';
         track.speedLimits = data(:,3)';

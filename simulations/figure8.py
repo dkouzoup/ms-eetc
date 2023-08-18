@@ -3,7 +3,7 @@ from figure6 import runSimulation, plotThreeTrajectories
 
 if __name__ == '__main__':
 
-    df0, df0b, df1, df1b, df2, df2b, _, _ = runSimulation(trackID='Swiss')
+    df0, df0b, df1, df1b, df2, df2b, _, _ = runSimulation(trackID='00_stationX_stationY')
 
     actualLosses0 =  df0b['Losses [kWh]'].sum()
     actualLosses1 = df1b['Losses [kWh]'].sum()
