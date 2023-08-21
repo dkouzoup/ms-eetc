@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import numpy as np
 import pandas as pd
 
@@ -134,6 +135,7 @@ class Track():
 
         self.tUpper = tUpper  # maximum travel time [s] (minimum time + reserve)
 
+        # check config
         if not isinstance(config, dict):
 
             raise ValueError("Track configuration should be provided as a dictionary!")
@@ -142,12 +144,38 @@ class Track():
 
             raise ValueError("Track ID must be specified in configuration!")
 
+        # open json file
         filename = os.path.join(pathJSON, config['id']+'.json')
 
         with open(filename) as file:
 
             data = json.load(file)
 
+        # check compatibility of TTOBench version
+        versionTTOBench = '1.1'
+
+        if 'metadata' not in data or 'library version' not in data['metadata']:
+
+            raise ValueError("Library version not found in json file!")
+
+        else:
+
+            pattern = r'v([\d.]+)'
+            match = re.search(pattern, data['metadata']['library version'])
+
+            if match:
+
+                version = match.group(1)
+
+                if version != versionTTOBench:
+
+                    raise ValueError("Import function works only for library version {}!".format(versionTTOBench))
+
+            else:
+
+                raise ValueError("Unexpected format of 'library version' in json file!")
+
+        # read data
         self.length = convertUnit(data['stops']['values'][-1], data['stops']['unit'])
         self.altitude = convertUnit(data['altitude']['value'], data['altitude']['unit']) if 'altitude' in data else 0
         self.title = data['metadata']['id']

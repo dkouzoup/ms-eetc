@@ -2,8 +2,8 @@
     "metadata": {
         "id": "00_var_speed_limit_100",
         "created by": "Dimitris Kouzoupis",
-        "library version": "1.1",
-        "license": "This file is part of TTOBench (BSD 2-Clause License)"
+        "library version": "TTOBench v1.1",
+        "license": "BSD 2-Clause License"
     },
     "altitude": {
         "unit": "m",
