@@ -339,23 +339,22 @@ class TrainIntegrator():
         bDot = mdl.ode[1]
         eDot = mdl.rollingResistance*mdl.parameters[1]
 
-        ds = ca.MX.sym('ds')
         x = ca.vertcat(mdl.states[1], ca.MX.sym('e'))
-        p = ca.vertcat(mdl.controls, mdl.parameters, ds)
+        p = ca.vertcat(mdl.controls, mdl.parameters)
         xdot = ca.vertcat(bDot, eDot)
 
         if solver == 'RK':
 
-            fun = ca.Function('rhs', [x, p[:-1]], [xdot])
+            fun = ca.Function('rhs', [x, p], [xdot])
 
             self.rollingResistanceIntegrator = ca.simpleRK(fun, 2, 4)
 
         elif solver == 'CVODES':
 
             t0, tf = 0, 1
-            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':x, 'p':p, 'ode':ds*xdot}, t0, tf, {'abstol':1e-8, 'reltol':1e-6})
+            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':x, 'p':p, 'ode':xdot}, t0, tf, {'abstol':1e-8, 'reltol':1e-6})
 
-            self.rollingResistanceIntegrator = lambda x, p, ds: cvodesFun(x0=x, p=ca.vertcat(p, ds))['xf']
+            self.rollingResistanceIntegrator = lambda x, p, dummy: cvodesFun(x0=x, p=p)['xf']
 
         else:
 
