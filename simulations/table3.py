@@ -24,7 +24,8 @@ if __name__ == '__main__':
 
     train.powerLosses = fun
 
-    track = Track(config={'id':'00_var_speed_limit_100'}, tUpper=1541, pathJSON='../tracks')
+    track = Track(config={'id':'00_var_speed_limit_100'}, pathJSON='../tracks')
+    tripTime = 1541
 
     with open('config.json') as file:
 
@@ -54,7 +55,7 @@ if __name__ == '__main__':
 
         for ii in range(nRuns):
 
-            df, stats = ocp.solve(initialVelocity=v0, terminalVelocity=vN)
+            df, stats = ocp.solve(tripTime,  terminalVelocity=vN, initialVelocity=v0)
 
             cpuTmp += [stats['CPU time [s]']]
             iterTmp += [stats['IP iterations']]

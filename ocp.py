@@ -133,11 +133,10 @@ class casadiSolver():
         self.points = computeDiscretizationPoints(track, numIntervals)
         self.steps = np.diff(self.points.index)
 
-        initialTime = 0.
-        terminalTime = track.tUpper
-
         # real-time parameters
 
+        self.initialTime = ca.MX.sym('t0')
+        self.terminalTime = ca.MX.sym('tN')
         self.initialVelocitySquared = ca.MX.sym('v0sq')
         self.terminalVelocitySquared = ca.MX.sym('vNsq')
 
@@ -256,14 +255,14 @@ class casadiSolver():
             if i == 0:
 
                 # initial state constraints
-                lbz += [initialTime, self.initialVelocitySquared]
-                ubz += [initialTime, self.initialVelocitySquared]
+                lbz += [self.initialTime, self.initialVelocitySquared]
+                ubz += [self.initialTime, self.initialVelocitySquared]
 
             elif i == numIntervals:
 
                 # terminal state constraints
-                lbz += [initialTime, self.terminalVelocitySquared]
-                ubz += [terminalTime, self.terminalVelocitySquared]
+                lbz += [self.initialTime, self.terminalVelocitySquared]
+                ubz += [self.terminalTime, self.terminalVelocitySquared]
 
             else:
 
@@ -273,20 +272,18 @@ class casadiSolver():
 
                 speedLimit = min(speedLimit, self.points.iloc[i-1]['Speed limit [m/s]'])  # do not accelerate before speed limit increase
 
-                lbz += [0, velocityMin**2]
-                ubz += [terminalTime, speedLimit**2]
+                lbz += [self.initialTime, velocityMin**2]
+                ubz += [self.terminalTime, speedLimit**2]
 
         # scaling of objective function (fixes convergence issues when using powerLosses)
 
         if opts.energyOptimal:
 
-            maxPow = powerMax if powerMax is not None else forceMax*self.points.max()['speed limit [m/s]']
-            maxEnergy = terminalTime*maxPow
-            scalingFactorObjective = maxEnergy
+            scalingFactorObjective = 3.6/(1e-6*totalMass)  # convert to kWh
 
         else:
 
-            scalingFactorObjective = terminalTime
+            scalingFactorObjective = track.length/train.velocityMax  # divide by fastest possible
 
         obj /= scalingFactorObjective
 
@@ -301,7 +298,6 @@ class casadiSolver():
         self.totalMass = totalMass
         self.velocityMin = velocityMin
         self.numIntervals = numIntervals
-        self.terminalTime = terminalTime
         self.withRgBrake = withRgBrake
         self.withPnBrake = withPnBrake
         self.train = train
@@ -317,13 +313,31 @@ class casadiSolver():
         self.powerLosses = powerLosses
 
 
-    def solve(self, initialVelocity=10/3.6, terminalVelocity=10/3.6):
+    def solve(self, terminalTime, initialTime=0, terminalVelocity=1, initialVelocity=1):
+
+        # check boundary conditions
+
+        if not isinstance(initialTime, (int, float)) or initialTime < 0:
+
+            raise ValueError("Initial time must be a positive number, not {}!".format(initialTime))
+
+        if not isinstance(terminalTime, (int, float)) or terminalTime <= 0:
+
+            raise ValueError("Terminal time must be a strictly positive number, not {}!".format(terminalTime))
+
+        if not isinstance(initialVelocity, (int, float)) or initialVelocity < 1:
+
+            raise ValueError("Initial velocity must be greater or equal to 1 m/s, not {}!".format(initialVelocity))
+
+        if not isinstance(terminalVelocity, (int, float)) or terminalVelocity < 1:
+
+            raise ValueError("Terminal velocity must be greater or equal to 1 m/s, not {}!".format(terminalVelocity))
 
         # initial guess
         # NOTE: good idea vel0 to be compatible with f0 (power-wise) to avoid nans at first iteration
 
         vel0 = (60/3.6)**2
-        dt = self.terminalTime/self.numIntervals
+        dt = (terminalTime - initialTime)/self.numIntervals
         t0 = 0
 
         z0 = []
@@ -342,9 +356,16 @@ class casadiSolver():
 
         v0 = min(max(initialVelocity, self.velocityMin), self.points.iloc[0]['Speed limit [m/s]'])
         vN = min(max(terminalVelocity, self.velocityMin), self.points.iloc[-1]['Speed limit [m/s]'])
-        lbz = ca.substitute(self.lbz, self.initialVelocitySquared, v0**2)
-        ubz = ca.substitute(self.ubz, self.initialVelocitySquared, v0**2)
+
+        lbz = self.lbz
+        lbz = ca.substitute(lbz, self.initialTime, initialTime)
+        lbz = ca.substitute(lbz, self.initialVelocitySquared, v0**2)
         lbz = ca.substitute(lbz, self.terminalVelocitySquared, vN**2)
+
+        ubz = self.ubz
+        ubz = ca.substitute(ubz, self.initialTime, initialTime)
+        ubz = ca.substitute(ubz, self.terminalTime, terminalTime)
+        ubz = ca.substitute(ubz, self.initialVelocitySquared, v0**2)
         ubz = ca.substitute(ubz, self.terminalVelocitySquared, vN**2)
 
         # NLP solution and post-processing of results
@@ -416,13 +437,13 @@ if __name__ == '__main__':
     etaRgBrake = 0.9
     train.powerLosses = lambda f,v: f*v*(f>0)*(1 - etaTraction)/(etaTraction) - (1-etaRgBrake)*f*v*(f<0)
 
-    track = Track(config={'id':'00_var_speed_limit_100'}, tUpper=1541)
+    track = Track(config={'id':'00_var_speed_limit_100'})
 
     opts = {'numIntervals':200, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
 
     solver = casadiSolver(train, track, opts)
 
-    df, stats = solver.solve(initialVelocity=1, terminalVelocity=1)
+    df, stats = solver.solve(1541)
 
     # print some info
     if df is not None:
