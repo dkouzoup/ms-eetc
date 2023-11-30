@@ -399,7 +399,7 @@ class casadiSolver():
 
             df = postProcessDataFrame(df, self.points, self.train)
 
-        return df, stats, zOpt
+        return df, stats
 
 
 if __name__ == '__main__':
@@ -422,7 +422,7 @@ if __name__ == '__main__':
 
     solver = casadiSolver(train, track, opts)
 
-    df, stats, _ = solver.solve(initialVelocity=1, terminalVelocity=1)
+    df, stats = solver.solve(initialVelocity=1, terminalVelocity=1)
 
     # print some info
     if df is not None:

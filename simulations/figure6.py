@@ -143,7 +143,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     for ii in range(nRuns):
 
-        df0, stats0, _ = ocp0.solve(initialVelocity=v0, terminalVelocity=vN)
+        df0, stats0 = ocp0.solve(initialVelocity=v0, terminalVelocity=vN)
 
         cpuTmp0 += [stats0['CPU time [s]']]
         iterTmp0 += [stats0['IP iterations']]
@@ -164,7 +164,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     for _ in range(nRuns):
 
-        df1, stats1, _ = ocp1.solve(initialVelocity=v0, terminalVelocity=vN)
+        df1, stats1 = ocp1.solve(initialVelocity=v0, terminalVelocity=vN)
 
         cpuTmp1 += [stats1['CPU time [s]']]
         iterTmp1 += [stats1['IP iterations']]
@@ -186,7 +186,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     for ii in range(nRuns):
 
-        df2, stats2, _ = ocp2.solve(initialVelocity=v0, terminalVelocity=vN)
+        df2, stats2 = ocp2.solve(initialVelocity=v0, terminalVelocity=vN)
 
         cpuTmp2 += [stats2['CPU time [s]']]
         iterTmp2 += [stats2['IP iterations']]

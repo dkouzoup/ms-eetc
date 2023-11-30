@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
         for ii in range(nRuns):
 
-            df, stats, _ = ocp.solve(initialVelocity=v0, terminalVelocity=vN)
+            df, stats = ocp.solve(initialVelocity=v0, terminalVelocity=vN)
 
             cpuTmp += [stats['CPU time [s]']]
             iterTmp += [stats['IP iterations']]

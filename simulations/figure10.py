@@ -37,7 +37,7 @@ cpuTimes = []
 
 for _ in range(nRuns):
 
-    df, stats, _ = solver.solve(initialVelocity=vmin, terminalVelocity=vmin)
+    df, stats = solver.solve(initialVelocity=vmin, terminalVelocity=vmin)
     cpuTimes.append(stats['CPU time [s]'])
 
 energy_dms = round(df['Energy [kWh]'].sum(), 2)

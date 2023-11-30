@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
         ocp0 = casadiSolver(train, track, solverOpts)
 
-        df0, _, _ = ocp0.solve(initialVelocity=v0, terminalVelocity=vN)
+        df0, _ = ocp0.solve(initialVelocity=v0, terminalVelocity=vN)
 
         # calculate actual losses
         train.powerLosses = fun2
@@ -134,7 +134,7 @@ if __name__ == '__main__':
 
         ocp1 = casadiSolver(train, track, solverOpts)
 
-        df1, _, _ = ocp1.solve(initialVelocity=v0, terminalVelocity=vN)
+        df1, _ = ocp1.solve(initialVelocity=v0, terminalVelocity=vN)
 
         # calculate actual losses
         train.powerLosses = fun2
@@ -146,7 +146,7 @@ if __name__ == '__main__':
 
         ocp2 = casadiSolver(train, track, solverOpts)
 
-        df2, _, _ = ocp2.solve(initialVelocity=v0, terminalVelocity=vN)
+        df2, _ = ocp2.solve(initialVelocity=v0, terminalVelocity=vN)
 
         # calculate actual losses
         train.powerLosses = fun2
