@@ -319,7 +319,7 @@ class casadiSolver():
 
     def solve(self, terminalTime, initialTime=0, terminalVelocity=1, initialVelocity=1):
 
-        # check boundary conditions
+        # check boundary conditions on time
 
         if not isinstance(initialTime, (int, float)) or initialTime < 0:
 
@@ -328,14 +328,6 @@ class casadiSolver():
         if not isinstance(terminalTime, (int, float)) or terminalTime <= 0:
 
             raise ValueError("Terminal time must be a strictly positive number, not {}!".format(terminalTime))
-
-        if not isinstance(initialVelocity, (int, float)) or initialVelocity < 1:
-
-            raise ValueError("Initial velocity must be greater or equal to 1 m/s, not {}!".format(initialVelocity))
-
-        if not isinstance(terminalVelocity, (int, float)) or terminalVelocity < 1:
-
-            raise ValueError("Terminal velocity must be greater or equal to 1 m/s, not {}!".format(terminalVelocity))
 
         # initial guess
         # NOTE: good idea vel0 to be compatible with f0 (power-wise) to avoid nans at first iteration
