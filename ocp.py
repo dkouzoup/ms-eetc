@@ -248,6 +248,10 @@ class casadiSolver():
                         lbg += [0]*2
                         ubg += [ca.inf]*2
 
+                    if i > 0:  # small penalty on deviations to remove unnecessary spikes
+
+                        obj += 1e-3*(Fel[i] - Fel[i-1])**2
+
             # state variables
             z += [time[i]]
             z += [velSq[i]]
