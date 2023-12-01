@@ -108,7 +108,7 @@ if __name__ == '__main__':
 
         tripTime = minimumTime*(1 + tp/100)
 
-        track = Track(config={'id':'00_var_speed_limit_100'}, tUpper=tripTime, pathJSON='../tracks')
+        track = Track(config={'id':'00_var_speed_limit_100'}, pathJSON='../tracks')
         track.updateLimits(positionEnd=8500)
 
         with open('config.json') as file:
@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
         ocp0 = casadiSolver(train, track, solverOpts)
 
-        df0, _, _ = ocp0.solve(initialVelocity=v0, terminalVelocity=vN)
+        df0, _ = ocp0.solve(tripTime, terminalVelocity=vN, initialVelocity=v0)
 
         # calculate actual losses
         train.powerLosses = fun2
@@ -134,7 +134,7 @@ if __name__ == '__main__':
 
         ocp1 = casadiSolver(train, track, solverOpts)
 
-        df1, _, _ = ocp1.solve(initialVelocity=v0, terminalVelocity=vN)
+        df1, _ = ocp1.solve(tripTime, initialVelocity=v0, terminalVelocity=vN)
 
         # calculate actual losses
         train.powerLosses = fun2
@@ -146,7 +146,7 @@ if __name__ == '__main__':
 
         ocp2 = casadiSolver(train, track, solverOpts)
 
-        df2, _, _ = ocp2.solve(initialVelocity=v0, terminalVelocity=vN)
+        df2, _ = ocp2.solve(tripTime, initialVelocity=v0, terminalVelocity=vN)
 
         # calculate actual losses
         train.powerLosses = fun2

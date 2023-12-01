@@ -11,7 +11,7 @@ from ocp import casadiSolver
 
 from utils import latexify
 
-vmin = 1
+vMin = 1
 
 train = Train(train='Intercity')
 
@@ -20,13 +20,14 @@ train.powerLosses = lambda f,v: f*v*(f>0)*(1 - etaMax)/etaMax - (1-etaMax)*f*v*(
 
 train.forceMinPn = 0
 
-track = Track(config={'id':'00_var_speed_limit_100'}, tUpper=1541, pathJSON='../tracks')
+track = Track(config={'id':'00_var_speed_limit_100'}, pathJSON='../tracks')
+tripTime = 1541
 
 with open('config.json') as file:
 
     solverOpts = json.load(file)
 
-solverOpts['minimumVelocity'] = vmin
+solverOpts['minimumVelocity'] = vMin
 
 nRuns = 5
 
@@ -37,7 +38,7 @@ cpuTimes = []
 
 for _ in range(nRuns):
 
-    df, stats, _ = solver.solve(initialVelocity=vmin, terminalVelocity=vmin)
+    df, stats = solver.solve(tripTime, terminalVelocity=vMin, initialVelocity=vMin)
     cpuTimes.append(stats['CPU time [s]'])
 
 energy_dms = round(df['Energy [kWh]'].sum(), 2)
