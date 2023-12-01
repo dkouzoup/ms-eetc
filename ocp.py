@@ -342,7 +342,7 @@ class casadiSolver():
 
         vel0 = (60/3.6)**2
         dt = (terminalTime - initialTime)/self.numIntervals
-        t0 = 0
+        t0 = initialTime
 
         z0 = []
 
