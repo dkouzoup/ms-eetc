@@ -124,8 +124,8 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
     fun1 = lambda f,v: f*v*(f>0)*(1 - etaMax)/etaMax - (1-etaMax)*f*v*(f<0)
     fun2 = totalLossesFunction(train, auxiliaries=27000, etaGear=0.96)
 
-    tUpper = 1541 if trackID == '00_var_speed_limit_100' else 1242
-    track = Track(config={'id':trackID}, tUpper=tUpper, pathJSON='../tracks')
+    tripTime = 1541 if trackID == '00_var_speed_limit_100' else 1242
+    track = Track(config={'id':trackID}, pathJSON='../tracks')
 
     with open('config.json') as file:
 
@@ -143,7 +143,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     for ii in range(nRuns):
 
-        df0, stats0, _ = ocp0.solve(initialVelocity=v0, terminalVelocity=vN)
+        df0, stats0 = ocp0.solve(tripTime, terminalVelocity=vN, initialVelocity=v0)
 
         cpuTmp0 += [stats0['CPU time [s]']]
         iterTmp0 += [stats0['IP iterations']]
@@ -164,7 +164,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     for _ in range(nRuns):
 
-        df1, stats1, _ = ocp1.solve(initialVelocity=v0, terminalVelocity=vN)
+        df1, stats1 = ocp1.solve(tripTime, initialVelocity=v0, terminalVelocity=vN)
 
         cpuTmp1 += [stats1['CPU time [s]']]
         iterTmp1 += [stats1['IP iterations']]
@@ -186,7 +186,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     for ii in range(nRuns):
 
-        df2, stats2, _ = ocp2.solve(initialVelocity=v0, terminalVelocity=vN)
+        df2, stats2 = ocp2.solve(tripTime, initialVelocity=v0, terminalVelocity=vN)
 
         cpuTmp2 += [stats2['CPU time [s]']]
         iterTmp2 += [stats2['IP iterations']]

@@ -128,12 +128,10 @@ def computeDiscretizationPoints(track, numIntervals):
 
 class Track():
 
-    def __init__(self, config, tUpper=None, pathJSON='tracks'):
+    def __init__(self, config, pathJSON='tracks'):
         """
         Constructor of Track objects.
         """
-
-        self.tUpper = tUpper  # maximum travel time [s] (minimum time + reserve)
 
         # check config
         if not isinstance(config, dict):
@@ -227,10 +225,6 @@ class Track():
         if self.altitude is None or np.isinf(self.altitude):
 
             raise ValueError("Altitude must be a number, not {}!".format(self.altitude))
-
-        if self.tUpper is None or self.tUpper <= 0 or np.isinf(self.tUpper):
-
-            raise ValueError("Maximum trip time must be a strictly positive number, not {}!".format(self.tUpper))
 
         if not self.gradientsOk():
 
@@ -376,5 +370,5 @@ if __name__ == '__main__':
 
     # Example on how to load and plot a track
 
-    track = Track(config={'id':'00_stationX_stationY'}, tUpper=1300)
+    track = Track(config={'id':'00_stationX_stationY'})
     track.plot()
