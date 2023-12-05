@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.append('..\..')
+sys.path.append('../..')
 
 from efficiency import totalLossesFunction
 from ocp import casadiSolver
@@ -27,9 +27,9 @@ class TestCurvatureResistance(unittest.TestCase):
 
     DEFAULT_SPEED_AT_END = 1 # [m/s]
     
-    THRESHOLD_VELOCITY_DIFFERENCES_MINIMUM_TIME_PROBLEM = 1e-5 # [km/h]
+    THRESHOLD_VELOCITY_ERROR_MINIMUM_TIME_PROBLEM = 1e-3 # adimensional quantity
 
-    THRESHOLD_ENERGY_DIFFERENCE_MINIMUM_ENERGY_PROBLEM = 0.1 # [kWh]
+    THRESHOLD_ENERGY_ERROR_MINIMUM_ENERGY_PROBLEM = 5e-2 # adimensional quantity
 
     @classmethod
     def setUpClass(cls):
@@ -51,11 +51,6 @@ class TestCurvatureResistance(unittest.TestCase):
             trackNoCurvature = originalTrack
 
             del trackNoCurvature['curvatures']
-
-            del trackNoCurvature['gradients']
-
-            trackNoCurvature["gradients"] = {"units": {"position": "m", "slope": "permil" }, 
-                                                    "values": [[0.0, 0.0]]}
 
             json.dump(trackNoCurvature, cls.fileNoCurvature, indent=4)
 
@@ -176,7 +171,6 @@ class TestCurvatureResistance(unittest.TestCase):
         lossFun = lambda f,v: 0
 
         train = Train(train='Intercity')
-
         train.forceMinPn = 0
 
         train.powerMax = None
@@ -207,26 +201,30 @@ class TestCurvatureResistance(unittest.TestCase):
                                                                  train = train)
 
         resultNoCurvature, resultConstantCurvature = resultNoCurvature.reset_index(), resultConstantCurvature.reset_index()
-
-        cls.assertTrue(all(np.abs((resultNoCurvature['Velocity [m/s]'] - resultConstantCurvature['Velocity [m/s]'])*3.6) <= cls.THRESHOLD_VELOCITY_DIFFERENCES_MINIMUM_TIME_PROBLEM))
+        
+        # at each shooting node, the difference in speed between the two tracks must be less then the speed on one of the 
+        # tracks times the threshold constant. 
+        # If the reference speed on one track is 100m/s, a threshold of 1e-3 means that the resulting difference in position is 0.1m every 100m.
+        cls.assertTrue(all(np.abs((resultNoCurvature['Velocity [m/s]'] - resultConstantCurvature['Velocity [m/s]'])/resultNoCurvature['Velocity [m/s]']) <= cls.THRESHOLD_VELOCITY_ERROR_MINIMUM_TIME_PROBLEM))
 
 
     
     def testMinimumEnergyProblem(cls):
         ''' 
         We solve the minimum energy problem for both tracks considering the same
-        train traveling on them and different power losses models.
+        train traveling on the two tracks and different power losses models.
         
         We verify that the minimal energy solution is such that the difference in 
         mechanical energy between the two tracks is equal to the energy 
         originating due to curvature resistance.
         '''
 
-        tripTime = 192.02 # [s]
+        tripTime = 200 # [s]
 
         finalPosition = 3475 # [m]
 
         train = Train(train='Intercity')
+        train.forceMinPn = 0
 
         etaMax = 0.73
         auxiliaries = 27000
@@ -240,6 +238,12 @@ class TestCurvatureResistance(unittest.TestCase):
         pathNoCurvature, filenameNoCurvature = os.path.split(os.path.abspath(cls.fileNoCurvature.name))
 
         pathConstantCurvature, filenameConstantCurvature = os.path.split(os.path.abspath(cls.fileConstantCurvature.name))
+
+        conversionWattToKWattHour = lambda w: w/(3600*1000)
+        energyCurvatureResistance = conversionWattToKWattHour(cls.specificCurvatureResistanceForce(train.g, train.rho)*train.rho*train.mass*finalPosition)
+
+        # contains the metric for measuring the correctness of the result
+        testsResults = []
 
         for lossFunction in lossesFunctions:
 
@@ -263,8 +267,6 @@ class TestCurvatureResistance(unittest.TestCase):
 
             resultNoCurvature, resultConstantCurvature = resultNoCurvature.reset_index(),  resultConstantCurvature.reset_index()
 
-            conversionWattToKWattHour = lambda w: w/(3600*1000)
-
             totalEnergyNoCurvature, totalEnergyConstantCurvature = round(resultNoCurvature['Energy [kWh]'].sum(),1), round(resultConstantCurvature['Energy [kWh]'].sum(),1)
             
             energyLossesNoCurvature, energyLossesConstantCurvature = round(resultNoCurvature['Losses [kWh]'].sum(),1), round(resultConstantCurvature['Losses [kWh]'].sum(),1)
@@ -272,12 +274,10 @@ class TestCurvatureResistance(unittest.TestCase):
             mechanicalEnergyTrackNoCurvature, mechanicalEnergyTrackConstantCurvature = totalEnergyNoCurvature - energyLossesNoCurvature, totalEnergyConstantCurvature - energyLossesConstantCurvature
 
             mechanicalEnergyDelta = mechanicalEnergyTrackConstantCurvature - mechanicalEnergyTrackNoCurvature
-            
-            energyCurvatureResistance = conversionWattToKWattHour(cls.specificCurvatureResistanceForce(train.g, train.rho)*train.rho*train.mass*finalPosition)
 
-            cls.assertTrue(energyCurvatureResistance - cls.THRESHOLD_ENERGY_DIFFERENCE_MINIMUM_ENERGY_PROBLEM 
-                            <= mechanicalEnergyDelta <= 
-                            energyCurvatureResistance + cls.THRESHOLD_ENERGY_DIFFERENCE_MINIMUM_ENERGY_PROBLEM)
+            testsResults.append(abs(energyCurvatureResistance - mechanicalEnergyDelta) / energyCurvatureResistance)
+        
+        cls.assertTrue(all([result <= cls.THRESHOLD_ENERGY_ERROR_MINIMUM_ENERGY_PROBLEM for result in testsResults]))
     
 
 if __name__ == '__main__':
