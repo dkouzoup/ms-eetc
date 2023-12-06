@@ -32,7 +32,7 @@ def importTuples(tuples, xLabel, yLabels):
     if any(index < 0):
 
         raise ValueError("Position data cannot be negative!")
-    
+
     if any(np.isinf(index)):
 
         raise ValueError("Position data cannot be infinite!")
@@ -187,13 +187,13 @@ class Track():
 
         self.importSpeedLimitTuples(data['speed limits']['values'], data['speed limits']['units']['velocity'])
 
-        self.importGradientTuples(data['gradients']['values'], data['gradients']['units']['slope'])
+        self.importGradientTuples(data['gradients']['values'] if 'gradients' in data else [(0.0, 0.0)],
+                                  data['gradients']['units']['slope'] if 'gradients' in data else 'permil')
 
-        self.importCurvatureTuples(data['curvatures']['values'] if 'curvatures' in data else [(0.0, "infinity", "infinity")], 
+        self.importCurvatureTuples(data['curvatures']['values'] if 'curvatures' in data else [(0.0, "infinity", "infinity")],
                                    data['curvatures']['units']['radius at start'] if 'curvatures' in data else "m",
                                    data['curvatures']['units']['radius at end'] if 'curvatures' in data else "m",
-                                   config['clothoidSamplingInterval'] if 'clothoidSamplingInterval' in config else None)  
-            
+                                   config['clothoidSamplingInterval'] if 'clothoidSamplingInterval' in config else None)
 
         numStops = len(data['stops']['values'])
         indxDeparture = config['from'] if 'from' in config else 0
@@ -256,7 +256,7 @@ class Track():
         if not self.speedLimitsOk():
 
             raise ValueError("Issue with track speed limits!")
-        
+
         if not self.curvaturesOk():
 
             raise ValueError("Issue with track curvatures!")
@@ -298,19 +298,13 @@ class Track():
         if not self.lengthOk():
 
             raise ValueError("Cannot import curvature without a valid track length!")
-        
-        if not unitRadiusStart == unitRadiusEnd:
 
-            raise ValueError("Radius at start and radius at end must have same unit!")
-        
-        unit = unitRadiusStart
-
-        if unit not in {'m', 'km'}:
+        if unitRadiusStart not in {'m', 'km'} or unitRadiusEnd not in {'m', 'km'}:
 
             raise ValueError("Specified curvature radius unit not supported!")
-        
+
         # if radius is 'infinity', the casting to float produces the float inf
-        tuples = [(p, convertUnit(float(radiusStart), unit), convertUnit(float(radiusEnd), unit)) for p, radiusStart, radiusEnd in tuples]
+        tuples = [(p, convertUnit(float(radiusStart), unitRadiusStart), convertUnit(float(radiusEnd), unitRadiusEnd)) for p, radiusStart, radiusEnd in tuples]
 
         tuples = self.sampleClothoid(tuples, clothoidSamplingInterval)
 
@@ -324,20 +318,36 @@ class Track():
         Approximates clothoid transition curves with piecewise-constant functions.
 
         Given an interval [s_i, s_i + ds] the approximation of K(s) on the interval
-        is K_avg(s) = (K(s_i) + K(s_i + ds))/2. For the last interval [s_i, s_f] the 
-        approximation of K(s) is K_avg(s) = (K(s_i) + K(s_f))/2 where K(s_f) is the 
-        curvature at the end of the section. When ds is not specified, K(s) is 
+        is K_avg(s) = (K(s_i) + K(s_i + ds))/2. For the last interval [s_i, s_f] the
+        approximation of K(s) is K_avg(s) = (K(s_i) + K(s_f))/2 where K(s_f) is the
+        curvature at the end of the section. When ds is not specified, K(s) is
         approximated as K_approx(s) = (K(s_0) + K(s_f))/2.
 
         - param tuples: a list of triples of form (p, Rstart, Rend) where p is the
-        coordinate at the start of the track section; Rstart is the radius at the 
-        start of the section and Rend the radius at the end.
-        - param ds: the step size used to approximate the clothoid. Note that in
+        coordinate [m] at the start of the track section; Rstart is the radius [m] at the
+        start of the section and Rend the radius [m] at the end.
+        - param ds: the step size [m] used to approximate the clothoid. Note that in
         general we can not guarantee all intervals to have size ds. Hence, in
         general, the last interval has lenght L such that: ds <= L < 2*ds.
-        - return: a list of pairs (p, K) where K is the approximation 
+        - return: a list of pairs (p, K) where K [1/m] is the approximation
         of the clothoid curvature in the track section starting at position p.
         """
+
+        if any([radiusValue == 0 for radiusValue in [trackSection[radiusType] for trackSection in tuples for radiusType in range(1,3)]]):
+
+            raise ValueError("Curvature radius can not be 0!")
+
+        if any([tuples[sectionIndex][0] < 0 for sectionIndex in range(len(tuples))]):
+
+            raise ValueError("Positions can not be negative!")
+
+        if any([tuples[sectionIndex][0] == tuples[sectionIndex+1][0] for sectionIndex in range(len(tuples)-1)]):
+
+            raise ValueError("Positions must be monotonically increasing")
+
+        if (ds != None and ds <= 0 ):
+
+            raise ValueError("Discretization step must be greater than zero or None!")
 
         result = []
 
@@ -349,7 +359,7 @@ class Track():
             curvatureStart = 1/trackSection[1]
             curvatureEnd = 1/trackSection[2]
 
-            if (curvatureStart - curvatureEnd) <= epsilon:
+            if abs(curvatureStart - curvatureEnd) <= epsilon:
 
                 result.append((sectionStart, curvatureStart))
 
@@ -365,7 +375,7 @@ class Track():
 
                     nIntervals = int((sectionEnd-sectionStart)/ds)
 
-                    # the curvature of a clothoid is K(s) = K_0 + (s-s_0)/alpha 
+                    # the curvature of a clothoid is K(s) = K_0 + (s-s_0)/alpha
                     alpha = (sectionEnd-sectionStart)/(curvatureEnd-curvatureStart)
 
                     for intervalIndex in range(nIntervals):
@@ -378,7 +388,7 @@ class Track():
                         avgCurvature = (curvatureAtDiscretizationPoint + curvatureEnd)/2 if intervalIndex==nIntervals-1 \
                               else curvatureAtDiscretizationPoint + ds/(2*alpha)
 
-                        result.append((discretizationPoint, avgCurvature))       
+                        result.append((discretizationPoint, avgCurvature))
 
         return result
 
