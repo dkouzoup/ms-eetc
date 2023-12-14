@@ -315,7 +315,7 @@ class Track():
 
     def sampleClothoid(self, tuples, ds=None):
         """
-        Approximates clothoid transition curves with piecewise-constant functions.
+        Approximates clothoid transition curve with piecewise-constant function.
 
         Given an interval [s_i, s_i + ds] the approximation of K(s) on the interval
         is K_avg(s) = (K(s_i) + K(s_i + ds))/2. For the last interval [s_i, s_f] the
@@ -326,20 +326,21 @@ class Track():
         - param tuples: a list of triples of form (p, Rstart, Rend) where p is the
         coordinate [m] at the start of the track section; Rstart is the radius [m] at the
         start of the section and Rend the radius [m] at the end.
-        - param ds: the step size [m] used to approximate the clothoid. Note that in
-        general we can not guarantee all intervals to have size ds. Hence, in
-        general, the last interval has lenght L such that: ds <= L < 2*ds.
+        - param ds: the step size [m] used to approximate the clothoid. Note that we cannot
+        guarantee that all intervals have size ds. Hence, in
+        general, the last interval has lenght L such that: ds <= L < 2*ds while all other
+        intervals have size ds.
         - return: a list of pairs (p, K) where K [1/m] is the approximation
         of the clothoid curvature in the track section starting at position p.
         """
 
         if any([radiusValue == 0 for radiusValue in [trackSection[radiusType] for trackSection in tuples for radiusType in range(1,3)]]):
 
-            raise ValueError("Curvature radius can not be 0!")
+            raise ValueError("Curvature radius cannot be 0!")
 
         if any([tuples[sectionIndex][0] < 0 for sectionIndex in range(len(tuples))]):
 
-            raise ValueError("Positions can not be negative!")
+            raise ValueError("Positions cannot be negative!")
 
         if any([tuples[sectionIndex][0] == tuples[sectionIndex+1][0] for sectionIndex in range(len(tuples)-1)]):
 
@@ -499,5 +500,5 @@ if __name__ == '__main__':
 
     # Example on how to load and plot a track
 
-    track = Track(config={'id':'00_stationX_stationY', 'clothoidSamplingInterval': 10})
+    track = Track(config={'id':'00_stationX_stationY'})
     track.plot()

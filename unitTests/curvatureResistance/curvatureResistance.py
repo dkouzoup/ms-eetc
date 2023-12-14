@@ -9,7 +9,6 @@ from efficiency import totalLossesFunction
 from ocp import casadiSolver
 from train import Train
 from track import Track
-from utils import postProcessDataFrame
 
 
 class TestCurvatureResistance(unittest.TestCase):
@@ -59,35 +58,22 @@ class TestCurvatureResistance(unittest.TestCase):
                 g*0.65*abs(self.constantK)/((1-55*abs(self.constantK))*rho)*(abs(self.constantK)>1/300)
 
 
-    def solveOptimalControlProblem(self, track, energyOptimal, lossFunction,
-                                   terminalTime, train=None, finalPosition=None, realLossFunction=None):
+    def solveOptimalControlProblem(self, track, energyOptimal, lossFunction, terminalTime, train, finalPosition):
         '''
         Solves a minimum time or minimium energy optimal control problem.
 
-        - param pathToTrackData: absolute path to the json file containing the track dataset
-        - param trackDataFilename: name of json file without extension
+        - param track: Track object
         - param energyOptimal: bool variable. If false the minimum time problem is solved
         - param lossFunction: a function taking two inputs (f,v) and returning the electrical
         losses of the train. Used for solving the minimum energy problem.
         - param terminalTime: time at which the trip must complete. For the minimum time problem this is just an upperbound of the problem.
+        - param train: Train object
         - param finalPosition: position where the trip must end.
-        - param realLossFunction: if provided this loss function is used to compute the real losses of the train. Note that it is not used to
-        solve the minimum energy problem.
         - return: a dataframe containing the solution of the problem.
         '''
 
         v0 = self.speedAtStart
         vN = self.speedAtEnd
-
-        if (train == None):
-
-            train = Train(train='Intercity')
-
-            train.forceMinPn = 0
-
-        if (finalPosition == None):
-
-            finalPosition = self.finalPosition
 
         track.updateLimits(positionEnd=finalPosition)
 
@@ -98,18 +84,11 @@ class TestCurvatureResistance(unittest.TestCase):
                     "energyOptimal": energyOptimal,
                     "minimumVelocity": min(v0, vN)}
 
-        # # # solve problem with perfect efficiency
         train.powerLosses = lossFunction
 
         ocp0 = casadiSolver(train, track, solverOpts)
 
         df0, _ = ocp0.solve(terminalTime, terminalVelocity=vN, initialVelocity=v0)
-
-        if (realLossFunction != None):
-
-            train.powerLosses = realLossFunction
-
-            df0 = postProcessDataFrame(df0, ocp0.points, train, integrateLosses=True)
 
         return df0
 
@@ -123,28 +102,27 @@ class TestCurvatureResistance(unittest.TestCase):
         track plus the value of curvature resistance.
         2. The maximum regenerative braking force of the train travelling on the track with
         curvature is equal to the maximum regenerative braking force of the train on the straight
-        track minus the value of curvature resistance.
+        reduced by an amount equal to the value of curvature resistance.
 
         Under these conditions, the optimal speed profiles of both problems must coincide.
         '''
 
-        minTimeInitialGuess = 180 # [s]
+        minTimeUpperBound = 180 # [s]
 
         # # # Perfect efficiency
         lossFun = lambda f,v: 0
 
         train = Train(train='Intercity')
         train.forceMinPn = 0
-
         train.powerMax = None
-
         train.powerMin = None
 
         resultNoCurvature = self.solveOptimalControlProblem(track = self.trackNoCurvature,
                                                             energyOptimal = False,
                                                             lossFunction = lossFun,
-                                                            terminalTime = minTimeInitialGuess,
-                                                            train = train,)
+                                                            terminalTime = minTimeUpperBound,
+                                                            train = train,
+                                                            finalPosition = self.finalPosition)
 
         train.forceMax = train.forceMax + self.specificCurvatureResistanceForce(train.g, train.rho)*train.mass*train.rho
 
@@ -154,8 +132,9 @@ class TestCurvatureResistance(unittest.TestCase):
         resultConstantCurvature = self.solveOptimalControlProblem(track = self.trackConstantCurvature,
                                                                   energyOptimal = False,
                                                                   lossFunction = lossFun,
-                                                                  terminalTime = minTimeInitialGuess,
-                                                                  train = train)
+                                                                  terminalTime = minTimeUpperBound,
+                                                                  train = train,
+                                                                  finalPosition = self.finalPosition)
 
         resultNoCurvature, resultConstantCurvature = resultNoCurvature.reset_index(), resultConstantCurvature.reset_index()
 
@@ -165,12 +144,10 @@ class TestCurvatureResistance(unittest.TestCase):
 
     def testMinimumEnergyProblem(self):
         '''
-        We solve the minimum energy problem for both tracks considering the same
-        train traveling on the two tracks and different power losses models.
-
-        We verify that the minimal energy solution is such that the difference in
-        mechanical energy between the two tracks is equal to the energy
-        originating due to curvature resistance.
+        Solves the minimum energy problem for both tracks considering
+        different power losses models. The difference in
+        mechanical energy between the two optimal trajectories
+        must be equal to the energy originating from curvature resistance.
         '''
 
         tripTime = 200 # [s]
@@ -202,16 +179,14 @@ class TestCurvatureResistance(unittest.TestCase):
                                                                 lossFunction = lossFunction,
                                                                 terminalTime = tripTime,
                                                                 train = train,
-                                                                finalPosition = finalPosition,
-                                                                realLossFunction = realLosses)
+                                                                finalPosition = finalPosition)
 
             resultConstantCurvature = self.solveOptimalControlProblem(track = self.trackConstantCurvature,
                                                                       energyOptimal = True,
                                                                       lossFunction = lossFunction,
                                                                       terminalTime = tripTime,
                                                                       train = train,
-                                                                      finalPosition = finalPosition,
-                                                                      realLossFunction = realLosses)
+                                                                      finalPosition = finalPosition)
 
             resultNoCurvature, resultConstantCurvature = resultNoCurvature.reset_index(),  resultConstantCurvature.reset_index()
 
@@ -272,7 +247,7 @@ class TestCurvatureResistance(unittest.TestCase):
 
         self.assertTrue(testTrack.curvatures['Curvature [1/m]'].to_dict() == expectedResult)
 
-        # # # sampling which is not multiple of the interval.
+        # # # track length not divisible by ds.
 
         ds = testTrack.length/4 + 1
 
@@ -288,7 +263,7 @@ class TestCurvatureResistance(unittest.TestCase):
 
         self.assertTrue(testTrack.curvatures['Curvature [1/m]'].to_dict() == expectedResult)
 
-        # # # Radius equal to "infinity"
+        # # # radius equal to "infinity"
 
         testTrack.importCurvatureTuples(tuples=[[0.0, r0, "infinity"]])
 
