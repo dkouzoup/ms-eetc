@@ -1,10 +1,11 @@
-import os
 import json
+import math
+import os
 import re
+import sys
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-import matplotlib.pyplot as plt
 
 
 def importTuples(tuples, xLabel, yLabels):
@@ -31,6 +32,10 @@ def importTuples(tuples, xLabel, yLabels):
     if any(index < 0):
 
         raise ValueError("Position data cannot be negative!")
+
+    if any(np.isinf(index)):
+
+        raise ValueError("Position data cannot be infinite!")
 
     if any(np.diff(index) <= 0):
 
@@ -128,6 +133,8 @@ def computeDiscretizationPoints(track, numIntervals):
 
 class Track():
 
+    CURVATURE_THRESHOLD = 1/150 # absolute value of maximum allowed cruvature [1/m]
+
     def __init__(self, config, pathJSON='tracks'):
         """
         Constructor of Track objects.
@@ -150,7 +157,7 @@ class Track():
             data = json.load(file)
 
         # check compatibility of TTOBench version
-        versionTTOBench = '1.1'
+        versionsTTOBench = ['1.1', '1.2']
 
         if 'metadata' not in data or 'library version' not in data['metadata']:
 
@@ -165,9 +172,9 @@ class Track():
 
                 version = match.group(1)
 
-                if version != versionTTOBench:
+                if version not in versionsTTOBench:
 
-                    raise ValueError("Import function works only for library version {}!".format(versionTTOBench))
+                    raise ValueError("Import function works only for library versions {}!".format(','.join(versionsTTOBench)))
 
             else:
 
@@ -179,7 +186,14 @@ class Track():
         self.title = data['metadata']['id']
 
         self.importSpeedLimitTuples(data['speed limits']['values'], data['speed limits']['units']['velocity'])
-        self.importGradientTuples(data['gradients']['values'], data['gradients']['units']['slope'])
+
+        self.importGradientTuples(data['gradients']['values'] if 'gradients' in data else [(0.0, 0.0)],
+                                  data['gradients']['units']['slope'] if 'gradients' in data else 'permil')
+
+        self.importCurvatureTuples(data['curvatures']['values'] if 'curvatures' in data else [(0.0, "infinity", "infinity")],
+                                   data['curvatures']['units']['radius at start'] if 'curvatures' in data else "m",
+                                   data['curvatures']['units']['radius at end'] if 'curvatures' in data else "m",
+                                   config['clothoidSamplingInterval'] if 'clothoidSamplingInterval' in config else None)
 
         numStops = len(data['stops']['values'])
         indxDeparture = config['from'] if 'from' in config else 0
@@ -216,6 +230,15 @@ class Track():
         return True if self.speedLimits.shape[0] > 0 and checkDataFrame(self.speedLimits, self.length) else False
 
 
+    def curvaturesOk(self):
+
+        if (abs(self.curvatures['Curvature [1/m]']) > Track.CURVATURE_THRESHOLD).values.any():
+
+            return False
+
+        return True if self.curvatures.shape[0] > 0 and checkDataFrame(self.curvatures, self.length) else False
+
+
     def checkFields(self):
 
         if not self.lengthOk():
@@ -233,6 +256,10 @@ class Track():
         if not self.speedLimitsOk():
 
             raise ValueError("Issue with track speed limits!")
+
+        if not self.curvaturesOk():
+
+            raise ValueError("Issue with track curvatures!")
 
 
     def importGradientTuples(self, tuples, unit='permil'):
@@ -266,6 +293,107 @@ class Track():
         checkDataFrame(self.speedLimits, self.length)
 
 
+    def importCurvatureTuples(self, tuples, unitRadiusStart='m', unitRadiusEnd='m', clothoidSamplingInterval=None):
+
+        if not self.lengthOk():
+
+            raise ValueError("Cannot import curvature without a valid track length!")
+
+        if unitRadiusStart not in {'m', 'km'} or unitRadiusEnd not in {'m', 'km'}:
+
+            raise ValueError("Specified curvature radius unit not supported!")
+
+        # if radius is 'infinity', the casting to float produces the float inf
+        tuples = [(p, convertUnit(float(radiusStart), unitRadiusStart), convertUnit(float(radiusEnd), unitRadiusEnd)) for p, radiusStart, radiusEnd in tuples]
+
+        tuples = self.sampleClothoid(tuples, clothoidSamplingInterval)
+
+        self.curvatures = importTuples(tuples, 'Position [m]', ['Curvature [1/m]'])
+
+        checkDataFrame(self.curvatures, self.length)
+
+
+    def sampleClothoid(self, tuples, ds=None):
+        """
+        Approximates clothoid transition curve with piecewise-constant function.
+
+        Given an interval [s_i, s_i + ds] the approximation of K(s) on the interval
+        is K_avg(s) = (K(s_i) + K(s_i + ds))/2. For the last interval [s_i, s_f] the
+        approximation of K(s) is K_avg(s) = (K(s_i) + K(s_f))/2 where K(s_f) is the
+        curvature at the end of the section. When ds is not specified, K(s) is
+        approximated as K_approx(s) = (K(s_0) + K(s_f))/2.
+
+        - param tuples: a list of triples of form (p, Rstart, Rend) where p is the
+        coordinate [m] at the start of the track section; Rstart is the radius [m] at the
+        start of the section and Rend the radius [m] at the end.
+        - param ds: the step size [m] used to approximate the clothoid. Note that we cannot
+        guarantee that all intervals have size ds. Hence, in
+        general, the last interval has lenght L such that: ds <= L < 2*ds while all other
+        intervals have size ds.
+        - return: a list of pairs (p, K) where K [1/m] is the approximation
+        of the clothoid curvature in the track section starting at position p.
+        """
+
+        if any([radiusValue == 0 for radiusValue in [trackSection[radiusType] for trackSection in tuples for radiusType in range(1,3)]]):
+
+            raise ValueError("Curvature radius cannot be 0!")
+
+        if any([tuples[sectionIndex][0] < 0 for sectionIndex in range(len(tuples))]):
+
+            raise ValueError("Positions cannot be negative!")
+
+        if any([tuples[sectionIndex][0] == tuples[sectionIndex+1][0] for sectionIndex in range(len(tuples)-1)]):
+
+            raise ValueError("Positions must be monotonically increasing")
+
+        if (ds != None and ds <= 0 ):
+
+            raise ValueError("Discretization step must be greater than zero or None!")
+
+        result = []
+
+        epsilon = sys.float_info.epsilon
+
+        for trackIndex, trackSection in enumerate(tuples):
+
+            sectionStart = trackSection[0]
+            curvatureStart = 1/trackSection[1]
+            curvatureEnd = 1/trackSection[2]
+
+            if abs(curvatureStart - curvatureEnd) <= epsilon:
+
+                result.append((sectionStart, curvatureStart))
+
+            else:
+
+                sectionEnd = tuples[trackIndex+1][0] if trackIndex < len(tuples)-1 else self.length
+
+                if ds == None or int((sectionEnd-sectionStart)/ds) == 0:
+
+                    result.append((sectionStart, (curvatureStart + curvatureEnd)/2))
+
+                else:
+
+                    nIntervals = int((sectionEnd-sectionStart)/ds)
+
+                    # the curvature of a clothoid is K(s) = K_0 + (s-s_0)/alpha
+                    alpha = (sectionEnd-sectionStart)/(curvatureEnd-curvatureStart)
+
+                    for intervalIndex in range(nIntervals):
+
+                        discretizationPoint = sectionStart+intervalIndex*ds
+
+                        curvatureAtDiscretizationPoint = curvatureStart + intervalIndex*ds/alpha
+
+                        # remark that the last interval has lenght L such that: ds <= L < 2*ds.
+                        avgCurvature = (curvatureAtDiscretizationPoint + curvatureEnd)/2 if intervalIndex==nIntervals-1 \
+                              else curvatureAtDiscretizationPoint + ds/(2*alpha)
+
+                        result.append((discretizationPoint, avgCurvature))
+
+        return result
+
+
     def reverse(self):
         # switch to opposite trip
 
@@ -285,6 +413,7 @@ class Track():
 
         self.gradients = -flipData(self.gradients)
         self.speedLimits = flipData(self.speedLimits)
+        self.curvatures = -flipData(self.curvatures)
 
         self.title = self.title + ' (reversed)'
 
@@ -293,11 +422,11 @@ class Track():
 
     def mergeDataFrames(self):
         """
-        Build dataframe with intervals of constant gradient and speed limit.
+        Build dataframe with intervals of constant gradient, speed limit and curvature.
         """
 
-        return self.gradients.join(self.speedLimits, how='outer').fillna(method='ffill')
-
+        joinedGradientsAndSpeedLimits = self.gradients.join(self.speedLimits, how='outer').fillna(method='ffill')
+        return self.curvatures.join(joinedGradientsAndSpeedLimits, how='outer').fillna(method='ffill')
 
     def print(self):
         """
@@ -364,6 +493,7 @@ class Track():
 
         self.speedLimits = crop(self.speedLimits)
         self.gradients = crop(self.gradients)
+        self.curvatures = crop(self.curvatures)
 
 
 if __name__ == '__main__':

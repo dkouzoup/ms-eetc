@@ -163,14 +163,17 @@ class TrainModel():
         # parameters
 
         gradient = ca.MX.sym('gradient')
+        curvature = ca.MX.sym('curvature')
         ds = ca.MX.sym('ds')
 
-        p = ca.vertcat(gradient, ds)
+        p = ca.vertcat(gradient, curvature, ds)
 
         # ODE
 
         rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared
-        acceleration = traction + (pnBrake if withPnBrake else 0) - rollingResistance - g*gradient*(1/rho)
+        curvatureResistance = ca.if_else(ca.fabs(curvature)<=1/300, g*0.5*ca.fabs(curvature)/(1-30*ca.fabs(curvature)),
+                                         g*0.65*ca.fabs(curvature)/(1-55*ca.fabs(curvature)))
+        acceleration = traction + (pnBrake if withPnBrake else 0) - rollingResistance - g*gradient*(1/rho) - curvatureResistance*(1/rho)
         timeODE = 1/ca.sqrt(velocitySquared)
         velocityODE = 2*acceleration
 
@@ -183,7 +186,7 @@ class TrainModel():
 
         self.ode = fExplicit
         self.acceleration = acceleration
-        self.accelerationFun = ca.Function('a', [x, u, gradient], [acceleration])
+        self.accelerationFun = ca.Function('a', [x, u, gradient, curvature], [acceleration])
         self.rollingResistance = rollingResistance
         self.parameters = p
         self.controls = u
@@ -256,14 +259,14 @@ class TrainIntegrator():
 
                 vCurr = ca.sqrt(bf[idx])
                 vNext = ca.sqrt(bf[idx+1])
-                tApprox += 2*model.parameters[1]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
+                tApprox += 2*model.parameters[2]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
 
             eval = ca.vertcat(tApprox, bf[-1])
 
             self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('ds')], [eval])
 
 
-    def solve(self, time, velocitySquared, ds, traction=0, pnBrake=0, gradient=0):
+    def solve(self, time, velocitySquared, ds, traction=0, pnBrake=0, gradient=0, curvature=0):
 
         withPnBrake = self.model.withPnBrake
 
@@ -273,7 +276,7 @@ class TrainIntegrator():
 
         x0 = ca.vertcat(time, velocitySquared)
         u0 = ca.vertcat(traction, pnBrake if withPnBrake else [])
-        p0 = ca.vertcat(gradient, ds)
+        p0 = ca.vertcat(gradient, curvature, ds)
         x1 = self.eval(x0, ca.vertcat(u0, p0), 1)
 
         out = {}
@@ -298,7 +301,7 @@ class TrainIntegrator():
 
         dt = ca.MX.sym('dt')
         x = ca.vertcat(vel, ca.MX.sym('eTr'), ca.MX.sym('eBr'))
-        p = ca.vertcat(mdl.controls, mdl.parameters[0], dt)
+        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], dt)
         xdot = ca.vertcat(velDot, energyTrDot, energyBrDot)
 
         if solver == 'RK':
@@ -321,11 +324,11 @@ class TrainIntegrator():
             raise ValueError("Unknown solver!")
 
 
-    def calcLosses(self, velocity, dt, traction=0, pnBrake=0, gradient=0):
+    def calcLosses(self, velocity, dt, traction=0, pnBrake=0, gradient=0, curvature=0):
 
         mdl = self.model
 
-        out = self.lossesIntegrator(ca.vertcat(velocity, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient), dt)
+        out = self.lossesIntegrator(ca.vertcat(velocity, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, curvature), dt)
 
         lossesTr, lossesRgb = out[1], out[2]
 
@@ -337,7 +340,7 @@ class TrainIntegrator():
         mdl = self.model
 
         bDot = mdl.ode[1]
-        eDot = mdl.rollingResistance*mdl.parameters[1]
+        eDot = mdl.rollingResistance*mdl.parameters[2]
 
         x = ca.vertcat(mdl.states[1], ca.MX.sym('e'))
         p = ca.vertcat(mdl.controls, mdl.parameters)
@@ -361,11 +364,12 @@ class TrainIntegrator():
             raise ValueError("Unknown solver!")
 
 
-    def calcRollingResistance(self, velocity, ds, traction=0, pnBrake=0, gradient=0):
+    def calcRollingResistance(self, velocity, ds, traction=0, pnBrake=0, gradient=0, curvature=0):
 
         mdl = self.model
 
-        out = self.rollingResistanceIntegrator(ca.vertcat(velocity**2, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, ds), 1)
+        out = self.rollingResistanceIntegrator(ca.vertcat(velocity**2, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient,
+                                                                                      curvature, ds), 1)
 
         losses = out[1]
 
@@ -460,11 +464,12 @@ if __name__ == '__main__':
     t0 = 0  # initial time [s]
     v0 = 40/3.6  # initial velocity [m/s]
     gd = -15/1e3  # slope [-]
+    cr = 1/300 # curvature [1/m]
     f0 = 0.4  # specific force [N/kg]
 
     trainSpecs = Train(train='Intercity')
     integrator = TrainIntegrator(trainSpecs.exportModel(), 'RK', optsDict={'numApproxSteps':2})
 
-    solution = integrator.solve(t0, v0**2, ds, f0, gradient=gd)
+    solution = integrator.solve(t0, v0**2, ds, f0, gradient=gd, curvature=cr)
 
     print(solution)
