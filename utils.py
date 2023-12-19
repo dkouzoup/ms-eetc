@@ -366,6 +366,80 @@ def checkTTOBenchVersion(jsonDict, supportedVersions):
             raise ValueError("Unexpected format of 'library version' in json file!")
 
 
+def convertUnit(value, unit):
+    """
+    Convert from any known unit to internally used unit.
+    """
+
+    if unit in {'m', 'm/s', 'permil', 'kg', 'W', 'N', 'm/s^2', '-', 'N/(m/s)', 'N/(m/s)^2', 'kg/m'}:
+
+        valueOut = value
+
+    elif unit == 'km':
+
+        valueOut = value/1e3
+
+    elif unit == 'km/h':
+
+        valueOut = value/3.6
+
+    elif unit == 't':
+
+        valueOut = value*1e3
+
+    elif unit == '%':
+
+        valueOut = value/100
+
+    elif unit == 'kW':
+
+        valueOut = value*1e3
+
+    elif unit == 'MW':
+
+        valueOut = value*1e6
+
+    elif unit == 'kN':
+
+        valueOut = value*1e3
+
+    elif unit == 'kN/(m/s)':
+
+        valueOut = value*1e3
+
+    elif unit == 'kN/(km/h)':
+
+        valueOut = value*1e3
+        valueOut = valueOut*3.6
+
+    elif unit == 'N/(km/h)':
+
+        valueOut = value*3.6
+
+    elif unit == 'kN/(m/s)^2':
+
+        valueOut = value*1e3
+
+    elif unit == 'kN/(km/h)^2':
+
+        valueOut = value*1e3
+        valueOut = valueOut*3.6**2
+
+    elif unit == 'N/(km/h)^2':
+
+        valueOut = value*3.6**2
+
+    elif unit == 't/m':
+
+        valueOut = value*1e3
+
+    else:
+
+        raise ValueError("Unknown unit: {}!".format(unit))
+
+    return valueOut
+
+
 def saveFig(fig, axs, filename):
 
     if filename is None:

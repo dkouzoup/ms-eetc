@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils import checkTTOBenchVersion
+from utils import checkTTOBenchVersion, convertUnit
 
 def importTuples(tuples, xLabel, yLabels):
     """
@@ -49,30 +49,6 @@ def importTuples(tuples, xLabel, yLabels):
         df[yLabel] = data
 
     return df
-
-
-def convertUnit(value, unit):
-    """
-    Convert from any known unit to internally used unit.
-    """
-
-    if unit in {'m', 'm/s', 'permil'}:
-
-        pass
-
-    elif unit == 'km':
-
-        value /= 1000
-
-    elif unit == 'km/h':
-
-        value /= 3.6
-
-    else:
-
-        raise ValueError("Unknown unit!")
-
-    return value
 
 
 def checkDataFrame(df, trackLength):
