@@ -1,12 +1,12 @@
 import json
 import math
 import os
-import re
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from utils import checkTTOBenchVersion
 
 def importTuples(tuples, xLabel, yLabels):
     """
@@ -156,29 +156,7 @@ class Track():
 
             data = json.load(file)
 
-        # check compatibility of TTOBench version
-        versionsTTOBench = ['1.1', '1.2']
-
-        if 'metadata' not in data or 'library version' not in data['metadata']:
-
-            raise ValueError("Library version not found in json file!")
-
-        else:
-
-            pattern = r'v([\d.]+)'
-            match = re.search(pattern, data['metadata']['library version'])
-
-            if match:
-
-                version = match.group(1)
-
-                if version not in versionsTTOBench:
-
-                    raise ValueError("Import function works only for library versions {}!".format(','.join(versionsTTOBench)))
-
-            else:
-
-                raise ValueError("Unexpected format of 'library version' in json file!")
+        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3'])
 
         # read data
         self.length = convertUnit(data['stops']['values'][-1], data['stops']['unit'])

@@ -1,4 +1,5 @@
 import matplotlib
+import re
 
 import numpy as np
 import casadi as ca
@@ -335,6 +336,34 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
         dfOut = simulateCVODES(dfOut, train.exportModel(), totalMass)
 
     return dfOut
+
+
+def checkTTOBenchVersion(jsonDict, supportedVersions):
+
+    if not isinstance(supportedVersions, list) or not all([isinstance(x, str) for x in supportedVersions]):
+
+        raise TypeError("'supportedVersions' must be specified a list of strings!")
+
+    if 'metadata' not in jsonDict or 'library version' not in jsonDict['metadata']:
+
+        raise ValueError("Library version not found in json file!")
+
+    else:
+
+        pattern = r'v([\d.]+)'
+        match = re.search(pattern, jsonDict['metadata']['library version'])
+
+        if match:
+
+            version = match.group(1)
+
+            if version not in supportedVersions:
+
+                raise ValueError("Import function works only for library versions {}!".format(','.join(supportedVersions)))
+
+        else:
+
+            raise ValueError("Unexpected format of 'library version' in json file!")
 
 
 def saveFig(fig, axs, filename):
