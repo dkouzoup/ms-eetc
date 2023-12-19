@@ -1,0 +1,64 @@
+{
+    "metadata": {
+        "id": "NL_intercity_VIRM6",
+        "created by": "Dimitris Kouzoupis",
+        "library version": "TTOBench v1.3",
+        "license": "BSD 2-Clause License"
+    },
+    "mass": {
+        "unit": "kg",
+        "value": 391000.0
+    },
+    "rho": {
+        "unit": "%",
+        "value": 6.0
+    },
+    "max traction power": {
+        "unit": "kW",
+        "value": 2157.0
+    },
+    "max reg braking power": {
+        "unit": "kW",
+        "value": 3616.0
+    },
+    "max traction force": {
+        "unit": "kN",
+        "value": 213.9
+    },
+    "max reg braking force": {
+        "unit": "kN",
+        "value": 142.5
+    },
+    "max pn braking force": {
+        "unit": "kN",
+        "value": 273.5
+    },
+    "max deceleration": {
+        "unit": "m/s^2",
+        "value": 0.66
+    },
+    "max speed": {
+        "unit": "km/h",
+        "value": 140
+    },
+    "rolling resistance r0": {
+        "unit": "kN",
+        "value": 5.854
+    },
+    "rolling resistance r1": {
+        "unit": "kN/(km/h)",
+        "value": 0.0206
+    },
+    "rolling resistance r2": {
+        "unit": "kN/(km/h)^2",
+        "value": 0.001
+    },
+    "efficiency traction": {
+        "unit": "%",
+        "value": 87.5
+    },
+    "efficiency reg brake": {
+        "unit": "%",
+        "value": 70.0
+    }
+}
