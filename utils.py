@@ -244,10 +244,8 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
     TractiveEnergyWheel = unitScaling*metersPerInterval*dfOut['Force (acc) [N]']
     BrakingEnergyWheel = -unitScaling*metersPerInterval*dfOut['Force (rgb) [N]']
 
-    f = var('f')
-    v = var('v')
-    powerLosses = train.powerLosses
-    fun = ca.Function('fun', [f, v], [powerLosses(f, v)/v])
+    specificPowerLosses = train.powerLossesFuns(split=False)
+    powerLosses = lambda f,v: totalMass*specificPowerLosses(f/totalMass, v)
 
     if not integrateLosses:
 

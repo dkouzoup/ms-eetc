@@ -59,7 +59,7 @@ class OptionsCasadiSolver(Options):
 
         if not isinstance(self.energyOptimal, bool):
 
-            raise ValueError("'energyOptimal' flag must be a boolean!")  # TODO: fix in master!
+            raise ValueError("'energyOptimal' flag must be a boolean!")
 
         if type(self.minimumVelocity) not in {int, float} or self.minimumVelocity <= 0:
 
@@ -96,16 +96,7 @@ class casadiSolver():
         rho = train.rho
         totalMass = train.mass*rho
 
-        powerLosses = train.powerLosses
-
-        if opts.integrateLosses:
-
-            powerLossesTr, powerLossesRgb = splitLosses(powerLosses)
-
-        else:
-
-            pow = lambda f,v : (1/totalMass)*powerLosses(f*totalMass, v)/v
-            powerLossesTr, powerLossesRgb = splitLosses(pow)
+        powerLossesTr, powerLossesRgb = train.powerLossesFuns()
 
         withRgBrake = train.forceMin != 0
         withPnBrake = train.forceMinPn != 0
@@ -119,8 +110,8 @@ class casadiSolver():
         powerMax = train.powerMax/totalMass if train.powerMax is not None else None
         powerMin = train.powerMin/totalMass if train.powerMin is not None else None
 
-        accMax = min(accInf, train.accMax if train.accMax is not None else np.inf)
-        accMin = max(-accInf, -abs(train.accMin) if train.accMin is not None else -np.inf)
+        accMax = min(accInf, train.accMax if train.accMax is not None else np.inf) if hasattr(train, 'accMax') else None
+        accMin = max(-accInf, -abs(train.accMin) if train.accMin is not None else -np.inf) if hasattr(train, 'accMin') else None
 
         velocityMax = train.velocityMax
 
@@ -231,8 +222,8 @@ class casadiSolver():
 
                         obj += self.steps[i]*(Fel[i] + s[i])
 
-                        g += [s[i] - powerLossesTr(Fel[i], vMid)]
-                        g += [s[i] - powerLossesRgb(Fel[i], vMid)]
+                        g += [s[i] - powerLossesTr(Fel[i], vMid)/vMid]
+                        g += [s[i] - powerLossesRgb(Fel[i], vMid)/vMid]
 
                         lbg += [0]*2
                         ubg += [ca.inf]*2
@@ -314,8 +305,6 @@ class casadiSolver():
         self.ubz = ca.vcat(ubz)
         self.lbg = ca.vcat(lbg)
         self.ubg = ca.vcat(ubg)
-
-        self.powerLosses = powerLosses
 
 
     def solve(self, terminalTime, initialTime=0, terminalVelocity=1, initialVelocity=1):
@@ -427,12 +416,7 @@ if __name__ == '__main__':
 
     # Example on how to solve an OCP
 
-    train = Train(train='Intercity')
-    train.accMax = 0.45  # add constraint on acceleration
-
-    etaTraction = 0.95
-    etaRgBrake = 0.9
-    train.powerLosses = lambda f,v: f*v*(f>0)*(1 - etaTraction)/(etaTraction) - (1-etaRgBrake)*f*v*(f<0)
+    train = Train(config={'id':'NL_intercity_VIRM6', 'max deceleration':None, 'max acceleration':{'unit':'m/s^2', 'value':0.45}})
 
     track = Track(config={'id':'00_var_speed_limit_100'})
 
@@ -448,8 +432,8 @@ if __name__ == '__main__':
         print("")
         print("Objective value = {:.2f} {}".format(stats['Cost'], 'kWh' if solver.opts.energyOptimal else 's'))
         print("")
-        print("Maximum acceleration: {:5.2f}, with bound {}".format(df.max()['Acceleration [m/s^2]'], train.accMax if train.accMax is not None else 'None'))
-        print("Maximum deceleration: {:5.2f}, with bound {}".format(df.min()['Acceleration [m/s^2]'], train.accMin if train.accMin is not None else 'None'))
+        print("Maximum acceleration: {:5.2f}, with bound {}".format(df.max()['Acceleration [m/s^2]'], train.accMax if hasattr(train, 'accMax') else 'None'))
+        print("Maximum deceleration: {:5.2f}, with bound {}".format(df.min()['Acceleration [m/s^2]'], train.accMin if hasattr(train, 'accMin') else 'None'))
 
     else:
 
