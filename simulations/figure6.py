@@ -104,7 +104,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
     v0 = 1
     vN = 1
 
-    train = Train(train='Intercity')
+    train = Train(config={'id':'NL_intercity_VIRM6'}, pathJSON='../trains')
 
     if brakeType == 'rg':
 

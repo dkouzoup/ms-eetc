@@ -13,12 +13,13 @@ from utils import latexify
 
 vMin = 1
 
-train = Train(train='Intercity')
-
-etaMax = 0.73
-train.powerLosses = lambda f,v: f*v*(f>0)*(1 - etaMax)/etaMax - (1-etaMax)*f*v*(f<0)
-
+train = Train(config={'id':'NL_intercity_VIRM6'}, pathJSON='../trains')
 train.forceMinPn = 0
+train.forceMin = - train.forceMax
+train.powerMax = 3129277
+train.powerMin = -train.powerMax
+train.etaTraction = 0.73
+train.etaRgBrake = 0.73
 
 track = Track(config={'id':'00_var_speed_limit_100'}, pathJSON='../tracks')
 tripTime = 1541

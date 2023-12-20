@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     # simulation parameters
 
-    train = Train(train='Intercity')
+    train = Train(config={'id':'NL_intercity_VIRM6'}, pathJSON='../trains')
 
     f0 = 0.5  # traction force [N/kg]
     f1 = -f0  # reg. braking force [N/kg]
