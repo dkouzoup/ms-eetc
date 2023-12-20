@@ -454,5 +454,5 @@ if __name__ == '__main__':
 
     # Example on how to load and plot a track
 
-    track = Track(config={'id':'00_stationX_stationY'})
+    track = Track(config={'id':'CH_StGallen_Wil'})
     track.plot()

@@ -4,8 +4,8 @@ from figure6 import runSimulation
 
 if __name__ == '__main__':
 
-    df0_rg, df0b_rg, df1_rg, df1b_rg, df2_rg, df2b_rg, stats_rg, _ = runSimulation(trackID='00_stationX_stationY', nRuns=5, brakeType='rg')
-    df0_pn, df0b_pn, df1_pn, df1b_pn, df2_pn, df2b_pn, stats_pn, _ = runSimulation(trackID='00_stationX_stationY', nRuns=5, brakeType='pn')
+    df0_rg, df0b_rg, df1_rg, df1b_rg, df2_rg, df2b_rg, stats_rg, _ = runSimulation(trackID='CH_StGallen_Wil', nRuns=5, brakeType='rg')
+    df0_pn, df0b_pn, df1_pn, df1b_pn, df2_pn, df2b_pn, stats_pn, _ = runSimulation(trackID='CH_StGallen_Wil', nRuns=5, brakeType='pn')
 
     expectedLosses0_rg = df0_rg['Losses [kWh]'].sum()
     expectedEnergy0_rg = df0_rg['Energy [kWh]'].sum()
