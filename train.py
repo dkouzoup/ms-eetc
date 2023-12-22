@@ -89,11 +89,11 @@ class Train():
 
         self.accMin = convertUnit(-abs(data['max deceleration']['value']), data['max deceleration']['unit']) if 'max deceleration' in data else None  # maximum allowed deceleration [m/s^2]
 
-        self.r0 = convertUnit(data['rolling resistance r0']['value'], data['rolling resistance r0']['unit'])  # constant term [-]
+        self.r0 = convertUnit(data['rolling resistance r0']['value'], data['rolling resistance r0']['unit'])  # constant term [N]
 
-        self.r1 = convertUnit(data['rolling resistance r1']['value'], data['rolling resistance r1']['unit'])  # linear term [-]
+        self.r1 = convertUnit(data['rolling resistance r1']['value'], data['rolling resistance r1']['unit'])  # linear term [N/(m/s)]
 
-        self.r2 = convertUnit(data['rolling resistance r2']['value'], data['rolling resistance r2']['unit'])  # quadratic term [-]
+        self.r2 = convertUnit(data['rolling resistance r2']['value'], data['rolling resistance r2']['unit'])  # quadratic term [N/(m/s)^2]
 
         if 'efficiency traction' in data or 'efficiency reg brake' in data:
 
