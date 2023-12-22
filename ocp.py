@@ -110,8 +110,8 @@ class casadiSolver():
         powerMax = train.powerMax/totalMass if train.powerMax is not None else None
         powerMin = train.powerMin/totalMass if train.powerMin is not None else None
 
-        accMax = min(accInf, train.accMax if train.accMax is not None else np.inf) if hasattr(train, 'accMax') else None
-        accMin = max(-accInf, -abs(train.accMin) if train.accMin is not None else -np.inf) if hasattr(train, 'accMin') else None
+        accMax = min(accInf, train.accMax if train.accMax is not None else accInf)
+        accMin = max(-accInf, -abs(train.accMin) if train.accMin is not None else -accInf)
 
         velocityMax = train.velocityMax
 
@@ -197,8 +197,8 @@ class casadiSolver():
 
                 # acceleration constraints
                 g += [trainModel.accelerationFun(ca.vertcat(time[i], velSq[i]), ca.vcat(u), grad, curv)]
-                lbg += [-abs(accMin) if accMin is not None else -10]
-                ubg += [abs(accMax) if accMax is not None else 10]
+                lbg += [accMin]
+                ubg += [accMax]
 
                 # coupling constraints
                 out = trainIntegrator.solve(time=time[i], velocitySquared=velSq[i], ds=self.steps[i],
@@ -432,8 +432,8 @@ if __name__ == '__main__':
         print("")
         print("Objective value = {:.2f} {}".format(stats['Cost'], 'kWh' if solver.opts.energyOptimal else 's'))
         print("")
-        print("Maximum acceleration: {:5.2f}, with bound {}".format(df.max()['Acceleration [m/s^2]'], train.accMax if hasattr(train, 'accMax') else 'None'))
-        print("Maximum deceleration: {:5.2f}, with bound {}".format(df.min()['Acceleration [m/s^2]'], train.accMin if hasattr(train, 'accMin') else 'None'))
+        print("Maximum acceleration: {:5.2f}, with bound {}".format(df.max()['Acceleration [m/s^2]'], train.accMax if train.accMax is not None else 'None'))
+        print("Maximum deceleration: {:5.2f}, with bound {}".format(df.min()['Acceleration [m/s^2]'], train.accMin if train.accMin is not None else 'None'))
 
     else:
 

@@ -75,23 +75,19 @@ class Train():
 
         self.velocityMax = convertUnit(data['max speed']['value'], data['max speed']['unit'])  # maximum train speed [m/s]
 
-        self.forceMax = convertUnit(data['max traction force']['value'], data['max traction force']['unit'])  # maximum traction force [N]
+        self.forceMax = convertUnit(data['max traction force']['value'], data['max traction force']['unit']) if 'max traction force' in data else None  # maximum traction force [N]
 
-        self.forceMin = convertUnit(-abs(data['max reg braking force']['value']), data['max reg braking force']['unit'])  # maximum regenerative braking force [N]
+        self.forceMin = convertUnit(-abs(data['max reg braking force']['value']), data['max reg braking force']['unit']) if 'max reg braking force' in data else None  # maximum regenerative braking force [N]
 
-        self.forceMinPn = convertUnit(-abs(data['max pn braking force']['value']), data['max pn braking force']['unit'])  # maximum pneumatic braking force [N]
+        self.forceMinPn = convertUnit(-abs(data['max pn braking force']['value']), data['max pn braking force']['unit']) if 'max pn braking force' in data else None # maximum pneumatic braking force [N]
 
-        self.powerMax = convertUnit(data['max traction power']['value'], data['max traction power']['unit'])  # maximum traction power [W]
+        self.powerMax = convertUnit(data['max traction power']['value'], data['max traction power']['unit']) if 'max traction power' in data else None  # maximum traction power [W]
 
-        self.powerMin = convertUnit(-abs(data['max reg braking power']['value']), data['max reg braking power']['unit'])  # maximum regenerative braking power [W]
+        self.powerMin = convertUnit(-abs(data['max reg braking power']['value']), data['max reg braking power']['unit']) if 'max reg braking power' in data else None # maximum regenerative braking power [W]
 
-        if 'max acceleration' in data:
+        self.accMax = convertUnit(data['max acceleration']['value'], data['max acceleration']['unit']) if 'max acceleration' in data else None  # maximum acceleration [m/s^2]
 
-            self.accMax = convertUnit(data['max acceleration']['value'], data['max acceleration']['unit'])  # maximum acceleration [m/s^2]
-
-        if 'max deceleration' in data:
-
-            self.accMin = convertUnit(-abs(data['max deceleration']['value']), data['max deceleration']['unit'])  # maximum allowed deceleration [m/s^2]
+        self.accMin = convertUnit(-abs(data['max deceleration']['value']), data['max deceleration']['unit']) if 'max deceleration' in data else None  # maximum allowed deceleration [m/s^2]
 
         self.r0 = convertUnit(data['rolling resistance r0']['value'], data['rolling resistance r0']['unit'])  # constant term [-]
 
@@ -117,31 +113,31 @@ class Train():
 
     def checkFields(self):
 
-        if self.mass < 0 or np.isinf(self.mass):
+        if self.mass is None or self.mass < 0 or np.isinf(self.mass):
 
             raise ValueError("Train mass must be a positive number, not {}!".format(self.mass))
 
-        if not 9 <= self.g <= 10:
+        if self.g is None or not 9 <= self.g <= 10:
 
             raise ValueError("Acceleration of gravity must be between 9 and 10 m/s^2, not {}!".format(self.g))
 
-        if not 1 <= self.rho <= 1.5:
+        if self.rho is None or not 1 <= self.rho <= 1.5:
 
             raise ValueError("Rotation mass factor must be between 1 and 1.5, not {}!".format(self.rho))
 
-        if self.velocityMax <= 0:
+        if self.velocityMax is None or self.velocityMax <= 0 or np.isinf(self.velocityMax):
 
             raise ValueError("Maximum velocity must be a strictly positive number, not {}!".format(self.velocityMax))
 
-        if self.forceMax <= 0:
+        if self.forceMax is not None and (self.forceMax <= 0 or np.isinf(self.forceMax)):
 
             raise ValueError("Maximum traction force must be strictly positive or free (None), not {}!".format(self.forceMax))
 
-        if self.forceMinPn > 0:
+        if self.forceMinPn is not None and (self.forceMinPn > 0 or np.isinf(self.forceMinPn)):
 
             raise ValueError("Maximum pneumatic braking force must be negative, zero or free (None), not {}!".format(self.forceMinPn))
 
-        if self.forceMin > 0:
+        if self.forceMin is not None and (self.forceMin > 0 or np.isinf(self.forceMin)):
 
             raise ValueError("Maximum regenerative braking force must be negative, zero or free (None), not {}!".format(self.forceMin))
 
@@ -149,19 +145,19 @@ class Train():
 
             raise ValueError("Both brakes cannot be deactivated simultaneously!")
 
-        if self.powerMax <= 0:
+        if self.powerMax is not None and (self.powerMax <= 0 or np.isinf(self.powerMax)):
 
             raise ValueError("Maximum traction power must be strictly positive or free (None), not {}!".format(self.powerMax))
 
-        if self.powerMin >= 0:
+        if self.powerMin is not None and (self.powerMin >= 0 or np.isinf(self.powerMin)):
 
             raise ValueError("Maximum regenerative brake power must be strictly negative or free (None), not {}!".format(self.powerMin))
 
-        if hasattr(self, 'accMax') and (self.accMax <= 0 or np.isinf(self.accMax)):
+        if self.accMax is not None and (self.accMax <= 0 or np.isinf(self.accMax)):
 
             raise ValueError("Maximum acceleration must be strictly positive or free (None), not {}!".format(self.accMax))
 
-        if hasattr(self, 'accMin') and (self.accMin >= 0 or np.isinf(self.accMin)):
+        if self.accMin is not None and (self.accMin >= 0 or np.isinf(self.accMin)):
 
             raise ValueError("Maximum deceleration must be strictly negative or free (None), not {}!".format(self.accMin))
 
