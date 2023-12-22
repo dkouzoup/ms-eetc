@@ -95,6 +95,7 @@ class Train():
 
         self.r2 = convertUnit(data['rolling resistance r2']['value'], data['rolling resistance r2']['unit'])  # quadratic term [N/(m/s)^2]
 
+        # TODO: unify with case of dynamic efficiency
         if 'efficiency traction' in data or 'efficiency reg brake' in data:
 
             if 'efficiency traction' not in data or 'efficiency reg brake' not in data:
@@ -103,7 +104,7 @@ class Train():
 
             if 'values' in 'efficiency traction' or 'values' in 'efficiency reg brake':
 
-                raise ValueError("Dynamic efficiency from json file not implemented yet!")  # TODO
+                raise ValueError("Dynamic efficiency from json file not implemented yet!")
 
             self.etaTraction = convertUnit(data['efficiency traction']['value'], data['efficiency traction']['unit'])
             self.etaRgBrake = convertUnit(data['efficiency reg brake']['value'], data['efficiency reg brake']['unit'])
