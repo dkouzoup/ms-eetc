@@ -1,64 +1,113 @@
+import os
+import json
 import numpy as np
 import casadi as ca
 
-from utils import Options
-
-from data import dataIntercityTrain
+from utils import Options, checkTTOBenchVersion, convertUnit, splitLosses
 
 class Train():
-    "Class with train specifications."
 
-    def __init__(self, train='Intercity'):
+    def __init__(self, config, pathJSON='trains') -> None:
+        """
+        Constructor of Train objects.
+        """
 
-        if train == 'Intercity':
+        self.g = 9.81  # acceleration of gravity [m/s^2]
 
-            data = dataIntercityTrain()
+        # check config
+        if not isinstance(config, dict):
 
-        else:
+            raise ValueError("Train configuration should be provided as a dictionary!")
 
-            raise ValueError("Unknown train specified!")
+        if 'id' not in config:
 
-        # train mass parameters
+            raise ValueError("Train ID must be specified in configuration!")
 
-        self.mass = data['mass']  # train mass [kg]
+        # open json file
+        filename = os.path.join(pathJSON, config['id']+'.json')
 
-        self.g = data['g']  # acceleration of gravity [m/s^2]
+        with open(filename) as file:
 
-        self.rho = data['rho']  # rotating-mass factor [-]
+            data = json.load(file)
 
-        # velocity limits
+        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3'])
 
-        self.velocityMax = data['velocityMax']  # maximum train speed [m/s]
+        # overwrite json data with config values if applicable
 
-        # force limits
+        # NOTE: optional fields that may be missing from json but specified in config
+        optionalEntries = ["max acceleration", "max deceleration"]
 
-        self.forceMax = data['forceMax']  # maximum traction force [N]
+        usedFields = set()
+        config.pop('id')
 
-        self.forceMin = data['forceMin']  # maximum regenerative braking force [N]
+        for entry in config:
 
-        self.forceMinPn = data['forceMinPn']  # maximum pneumatic braking force [N]
+            if config[entry] is None and entry in data:  # None -> no constraint
 
-        # power limits and losses
+                data.pop(entry)
 
-        self.powerMax = data['powerMax']  # maximum traction power [W]
+                usedFields.add(entry)
 
-        self.powerMin = data['powerMin']  # maximum regenerative braking power [W]
+            else:
 
-        self.powerLosses = lambda f,v: 0  # losses [W] as function of: force [N] and velocity [m/s]
+                if not isinstance(config[entry], dict) or config[entry].keys() != {'unit', 'value'}:
 
-        # acceleration/deceleration limits
+                    raise ValueError("Configuration field '{}' should be specified as a dictionary with 'unit' and 'value' keys!".format(entry))
 
-        self.accMax = data['accMax']  # maximum acceleration [m/s^2]
+                if entry in data or entry in optionalEntries:
 
-        self.accMin = data['accMin']  # maximum allowed deceleration [m/s^2]
+                    data[entry] = config[entry]
 
-        # rolling resistance polynomial: f = r0 + r1*v + r2*v^2 [m/s -> N]
+                    usedFields.add(entry)
 
-        self.r0 = data['r0']  # constant term [-]
+        if set(config) != usedFields:
 
-        self.r1 = data['r1']  # linear term [-]
+            raise ValueError("Redundant fields in train configuration: {}!".format(', '.join(set(config) - usedFields)))
 
-        self.r2 = data['r2']  # quadratic term [-]
+        # read data
+        self.mass = convertUnit(data['mass']['value'], data['mass']['unit'])  # train mass [kg]
+
+        self.rho = convertUnit(data['rho']['value'], data['rho']['unit'])  # rotating-mass factor [-]
+
+        if self.rho < 1:
+
+            self.rho += 1  # 6% -> 0.06 -> 1.06
+
+        self.velocityMax = convertUnit(data['max speed']['value'], data['max speed']['unit'])  # maximum train speed [m/s]
+
+        self.forceMax = convertUnit(data['max traction force']['value'], data['max traction force']['unit']) if 'max traction force' in data else None  # maximum traction force [N]
+
+        self.forceMin = convertUnit(-abs(data['max reg braking force']['value']), data['max reg braking force']['unit']) if 'max reg braking force' in data else None  # maximum regenerative braking force [N]
+
+        self.forceMinPn = convertUnit(-abs(data['max pn braking force']['value']), data['max pn braking force']['unit']) if 'max pn braking force' in data else None # maximum pneumatic braking force [N]
+
+        self.powerMax = convertUnit(data['max traction power']['value'], data['max traction power']['unit']) if 'max traction power' in data else None  # maximum traction power [W]
+
+        self.powerMin = convertUnit(-abs(data['max reg braking power']['value']), data['max reg braking power']['unit']) if 'max reg braking power' in data else None # maximum regenerative braking power [W]
+
+        self.accMax = convertUnit(data['max acceleration']['value'], data['max acceleration']['unit']) if 'max acceleration' in data else None  # maximum acceleration [m/s^2]
+
+        self.accMin = convertUnit(-abs(data['max deceleration']['value']), data['max deceleration']['unit']) if 'max deceleration' in data else None  # maximum allowed deceleration [m/s^2]
+
+        self.r0 = convertUnit(data['rolling resistance r0']['value'], data['rolling resistance r0']['unit'])  # constant term [N]
+
+        self.r1 = convertUnit(data['rolling resistance r1']['value'], data['rolling resistance r1']['unit'])  # linear term [N/(m/s)]
+
+        self.r2 = convertUnit(data['rolling resistance r2']['value'], data['rolling resistance r2']['unit'])  # quadratic term [N/(m/s)^2]
+
+        # TODO: unify with case of dynamic efficiency
+        if 'efficiency traction' in data or 'efficiency reg brake' in data:
+
+            if 'efficiency traction' not in data or 'efficiency reg brake' not in data:
+
+                raise ValueError("Both efficiencies need to be specified in json file!")
+
+            if 'values' in 'efficiency traction' or 'values' in 'efficiency reg brake':
+
+                raise ValueError("Dynamic efficiency from json file not implemented yet!")
+
+            self.etaTraction = convertUnit(data['efficiency traction']['value'], data['efficiency traction']['unit'])
+            self.etaRgBrake = convertUnit(data['efficiency reg brake']['value'], data['efficiency reg brake']['unit'])
 
         self.checkFields()
 
@@ -77,7 +126,7 @@ class Train():
 
             raise ValueError("Rotation mass factor must be between 1 and 1.5, not {}!".format(self.rho))
 
-        if self.velocityMax <= 0 or np.isinf(self.velocityMax):
+        if self.velocityMax is None or self.velocityMax <= 0 or np.isinf(self.velocityMax):
 
             raise ValueError("Maximum velocity must be a strictly positive number, not {}!".format(self.velocityMax))
 
@@ -121,10 +170,6 @@ class Train():
 
                 raise ValueError("Rolling resistance coefficient {} must be positive, not {}!".format('r'+ii, coef))
 
-        if not callable(self.powerLosses):
-
-            raise ValueError("Power losses function must be a callable function handle!")
-
 
     def exportModel(self):
         "Export train model (ODE and relevant train data)."
@@ -139,6 +184,38 @@ class Train():
         withPnBrake = self.forceMinPn != 0
 
         return TrainModel(sr0, sr1, sr2, self.rho, self.g, withPnBrake)
+
+
+    def powerLossesFuns(self, split=True):
+        """
+        Return function of specific power losses for traction and regenerative brake
+
+        (either explicitly defined in powerLosses attribute or implicitly via the two efficiencies).
+
+        """
+
+        # build power losses function from etas if necessary
+        if not hasattr(self, 'powerLosses'):
+
+            if hasattr(self, 'etaTraction') and hasattr(self, 'etaRgBrake'):
+
+                # TODO: remove this from scripts
+                powerLosses = lambda f,v: f*v*(f>0)*(1 - self.etaTraction)/self.etaTraction - (1-self.etaRgBrake)*f*v*(f<0)
+
+            else:
+
+                raise ValueError("Power losses function of train must by either explicitly or implicitly defined!")
+
+        else:
+
+            powerLosses = self.powerLosses
+
+        totalMass = self.mass*self.rho
+
+        specificPowerLosses = lambda f,v : (1/totalMass)*powerLosses(f*totalMass, v)  # input: specific force, output: specific power losses
+        specificPowerLossesTr, specificPowerLossesRgb = splitLosses(specificPowerLosses)
+
+        return (specificPowerLossesTr, specificPowerLossesRgb) if split else specificPowerLosses
 
 
 class TrainModel():
@@ -467,7 +544,7 @@ if __name__ == '__main__':
     cr = 1/300 # curvature [1/m]
     f0 = 0.4  # specific force [N/kg]
 
-    trainSpecs = Train(train='Intercity')
+    trainSpecs = Train(config={'id':'NL_intercity_VIRM6'})
     integrator = TrainIntegrator(trainSpecs.exportModel(), 'RK', optsDict={'numApproxSteps':2})
 
     solution = integrator.solve(t0, v0**2, ds, f0, gradient=gd, curvature=cr)

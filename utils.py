@@ -1,4 +1,5 @@
 import matplotlib
+import re
 
 import numpy as np
 import casadi as ca
@@ -243,10 +244,8 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
     TractiveEnergyWheel = unitScaling*metersPerInterval*dfOut['Force (acc) [N]']
     BrakingEnergyWheel = -unitScaling*metersPerInterval*dfOut['Force (rgb) [N]']
 
-    f = var('f')
-    v = var('v')
-    powerLosses = train.powerLosses
-    fun = ca.Function('fun', [f, v], [powerLosses(f, v)/v])
+    specificPowerLosses = train.powerLossesFuns(split=False)
+    powerLosses = lambda f,v: totalMass*specificPowerLosses(f/totalMass, v)
 
     if not integrateLosses:
 
@@ -335,6 +334,108 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
         dfOut = simulateCVODES(dfOut, train.exportModel(), totalMass)
 
     return dfOut
+
+
+def checkTTOBenchVersion(jsonDict, supportedVersions):
+
+    if not isinstance(supportedVersions, list) or not all([isinstance(x, str) for x in supportedVersions]):
+
+        raise TypeError("'supportedVersions' must be specified a list of strings!")
+
+    if 'metadata' not in jsonDict or 'library version' not in jsonDict['metadata']:
+
+        raise ValueError("Library version not found in json file!")
+
+    else:
+
+        pattern = r'v([\d.]+)'
+        match = re.search(pattern, jsonDict['metadata']['library version'])
+
+        if match:
+
+            version = match.group(1)
+
+            if version not in supportedVersions:
+
+                raise ValueError("Import function works only for library versions {}!".format(','.join(supportedVersions)))
+
+        else:
+
+            raise ValueError("Unexpected format of 'library version' in json file!")
+
+
+def convertUnit(value, unit):
+    """
+    Convert from any known unit to internally used unit.
+    """
+
+    if unit in {'m', 'm/s', 'permil', 'kg', 'W', 'N', 'm/s^2', '-', 'N/(m/s)', 'N/(m/s)^2', 'kg/m'}:
+
+        valueOut = value
+
+    elif unit == 'km':
+
+        valueOut = value/1e3
+
+    elif unit == 'km/h':
+
+        valueOut = value/3.6
+
+    elif unit == 't':
+
+        valueOut = value*1e3
+
+    elif unit == '%':
+
+        valueOut = value/100
+
+    elif unit == 'kW':
+
+        valueOut = value*1e3
+
+    elif unit == 'MW':
+
+        valueOut = value*1e6
+
+    elif unit == 'kN':
+
+        valueOut = value*1e3
+
+    elif unit == 'kN/(m/s)':
+
+        valueOut = value*1e3
+
+    elif unit == 'kN/(km/h)':
+
+        valueOut = value*1e3
+        valueOut = valueOut*3.6
+
+    elif unit == 'N/(km/h)':
+
+        valueOut = value*3.6
+
+    elif unit == 'kN/(m/s)^2':
+
+        valueOut = value*1e3
+
+    elif unit == 'kN/(km/h)^2':
+
+        valueOut = value*1e3
+        valueOut = valueOut*3.6**2
+
+    elif unit == 'N/(km/h)^2':
+
+        valueOut = value*3.6**2
+
+    elif unit == 't/m':
+
+        valueOut = value*1e3
+
+    else:
+
+        raise ValueError("Unknown unit: {}!".format(unit))
+
+    return valueOut
 
 
 def saveFig(fig, axs, filename):

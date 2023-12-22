@@ -100,12 +100,12 @@ switch trackID
         track.gradients = [0, 10, 0];
         track.speedLimits = [140, 140, 140]./3.6;
 
-    case '00_stationX_stationY'
+    case 'CH_StGallen_Wil'
 
         track.length = 29556.1;
         track.time = 1242;
 
-        data = csvread('00_stationX_stationY.csv', 1, 0);
+        data = csvread('CH_StGallen_Wil.csv', 1, 0);
         track.phases = data(:,1)';
         track.gradients = data(:,2)';
         track.speedLimits = data(:,3)';
