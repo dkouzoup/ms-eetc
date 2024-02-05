@@ -54,7 +54,7 @@ def plotSplines(train, data):
 
 if __name__ == '__main__':
 
-    train = Train(config={'id':'NL_intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
     data = motorLossesFunction(train, detailedOutput=True)
 
     plotSplines(train, data)
