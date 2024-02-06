@@ -87,7 +87,7 @@ if __name__ == '__main__':
     v0 = 1
     vN = 100/3.6
 
-    train = Train(config={'id':'NL_intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
     train.forceMinPn = 0
 
     etaMax = 0.73

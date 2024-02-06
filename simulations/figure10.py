@@ -13,7 +13,7 @@ from utils import latexify
 
 vMin = 1
 
-train = Train(config={'id':'NL_intercity_VIRM6'}, pathJSON='../trains')
+train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
 train.forceMinPn = 0
 train.forceMin = - train.forceMax
 train.powerMax = 3129277
