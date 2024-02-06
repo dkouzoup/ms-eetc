@@ -112,7 +112,7 @@ class TestCurvatureResistance(unittest.TestCase):
         # # # Perfect efficiency
         lossFun = lambda f,v: 0
 
-        train = Train(train='Intercity')
+        train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../../trains')
         train.forceMinPn = 0
         train.powerMax = None
         train.powerMin = None
@@ -154,7 +154,7 @@ class TestCurvatureResistance(unittest.TestCase):
 
         finalPosition = 3475 # [m]
 
-        train = Train(train='Intercity')
+        train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../../trains')
         train.forceMinPn = 0
 
         etaMax = 0.73
