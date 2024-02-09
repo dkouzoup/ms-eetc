@@ -1,15 +1,12 @@
-import sys
-sys.path.append('..')
-
 import json
 
 import pandas as pd
 
-from utils import postProcessDataFrame
-from train import Train
-from track import Track
-from ocp import casadiSolver
-from efficiency import totalLossesFunction
+from mseetc.utils import postProcessDataFrame
+from mseetc.train import Train
+from mseetc.track import Track
+from mseetc.ocp import casadiSolver
+from mseetc.efficiency import totalLossesFunction
 
 
 if __name__ == '__main__':

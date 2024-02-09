@@ -3,12 +3,10 @@ import numpy as np
 import sys
 import unittest
 
-sys.path.append('../..')
-
-from efficiency import totalLossesFunction
-from ocp import casadiSolver
-from train import Train
-from track import Track
+from mseetc.efficiency import totalLossesFunction
+from mseetc.ocp import casadiSolver
+from mseetc.train import Train
+from mseetc.track import Track
 
 
 class TestCurvatureResistance(unittest.TestCase):

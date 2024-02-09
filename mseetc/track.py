@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils import checkTTOBenchVersion, convertUnit
+from .utils import checkTTOBenchVersion, convertUnit
 
 def importTuples(tuples, xLabel, yLabels):
     """

@@ -1,13 +1,10 @@
-import sys
-sys.path.append('..')
-
 import numpy as np
 
 import matplotlib.pyplot as plt
 from matplotlib.transforms import Bbox
 
-from utils import latexify, show, saveFig
-from efficiency import loadToForce, totalLossesFunction
+from mseetc.utils import latexify, show, saveFig
+from mseetc.efficiency import loadToForce, totalLossesFunction
 
 
 def plotSpline(loads, velocities, splineFun, forceMax, powerMax, axObj=None, type='3d'):
@@ -99,7 +96,7 @@ def plotSplines(loads, velocities, splineFun1, splineFun2, forceMax, powerMax, p
 
 if __name__ == '__main__':
 
-    from train import Train
+    from mseetc.train import Train
 
     train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
 

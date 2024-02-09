@@ -1,15 +1,12 @@
-import sys
-sys.path.append('..')
-
 import json
 
 import matplotlib.pyplot as plt
 
-from ocp import casadiSolver
-from train import Train
-from track import Track
-from utils import latexify, show, saveFig, postProcessDataFrame
-from efficiency import totalLossesFunction
+from mseetc.ocp import casadiSolver
+from mseetc.train import Train
+from mseetc.track import Track
+from mseetc.utils import latexify, show, saveFig, postProcessDataFrame
+from mseetc.efficiency import totalLossesFunction
 
 
 def plot(df0b_list, df1b_list, df2b_list, tp, figSize=None, filename=None):
