@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 from train import Train
 from track import Track
-from ocp import casadiSolver
+from mseetc.ms.ocp import casadiSolver
 
 from utils import latexify
 

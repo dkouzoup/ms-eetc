@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from mseetc.utils import postProcessDataFrame, latexify, show, saveFig
 from mseetc.train import Train
 from mseetc.track import Track, computeAltitude
-from mseetc.ocp import casadiSolver
+from mseetc.ms.ocp import casadiSolver
 from mseetc.efficiency import totalLossesFunction
 
 
