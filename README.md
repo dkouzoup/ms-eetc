@@ -18,7 +18,7 @@ Open-source code for paper: "Direct Multiple Shooting for Computationally Effici
 
 - Activate the virtual environment: `.\.env\Scripts\activate`
 
-- Install dependencies with: `pip install -r requirements.txt`
+- Install dependencies with: `pip install -e .`
 
 - deactivate virtual environment by typing: `deactivate`
 
