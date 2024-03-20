@@ -1,14 +1,11 @@
-import sys
-sys.path.append('..')
-
 import pandas as pd
 import numpy as np
 import casadi as ca
 
 import matplotlib.pyplot as plt
 
-from utils import vecToNum, IVP, latexify, show, saveFig
-from train import Train, TrainIntegrator
+from mseetc.utils import vecToNum, IVP, latexify, show, saveFig
+from mseetc.train import Train, TrainIntegrator
 
 
 if __name__ == '__main__':

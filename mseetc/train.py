@@ -3,7 +3,7 @@ import json
 import numpy as np
 import casadi as ca
 
-from utils import Options, checkTTOBenchVersion, convertUnit, splitLosses
+from .utils import Options, checkTTOBenchVersion, convertUnit, splitLosses
 
 class Train():
 

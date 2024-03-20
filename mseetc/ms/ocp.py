@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 import casadi as ca
 
-from train import *
+from ..train import *
 
-from track import computeDiscretizationPoints
+from ..track import computeDiscretizationPoints
 
-from utils import Options, var, postProcessDataFrame, splitLosses
+from ..utils import Options, var, postProcessDataFrame, splitLosses
 
 
 class OptionsCasadiSolver(Options):
@@ -407,34 +407,3 @@ class casadiSolver():
             df = postProcessDataFrame(df, self.points, self.train)
 
         return df, stats
-
-
-if __name__ == '__main__':
-
-    from train import Train
-    from track import Track
-
-    # Example on how to solve an OCP
-
-    train = Train(config={'id':'NL_intercity_VIRM6', 'max deceleration':None, 'max acceleration':{'unit':'m/s^2', 'value':0.45}})
-
-    track = Track(config={'id':'00_var_speed_limit_100'})
-
-    opts = {'numIntervals':200, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
-
-    solver = casadiSolver(train, track, opts)
-
-    df, stats = solver.solve(1541)
-
-    # print some info
-    if df is not None:
-
-        print("")
-        print("Objective value = {:.2f} {}".format(stats['Cost'], 'kWh' if solver.opts.energyOptimal else 's'))
-        print("")
-        print("Maximum acceleration: {:5.2f}, with bound {}".format(df.max()['Acceleration [m/s^2]'], train.accMax if train.accMax is not None else 'None'))
-        print("Maximum deceleration: {:5.2f}, with bound {}".format(df.min()['Acceleration [m/s^2]'], train.accMin if train.accMin is not None else 'None'))
-
-    else:
-
-        print("Solver failed!")
