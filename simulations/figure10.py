@@ -5,11 +5,11 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from train import Train
-from track import Track
+from mseetc.train import Train
+from mseetc.track import Track
 from mseetc.ms.ocp import casadiSolver
 
-from utils import latexify
+from mseetc.utils import latexify
 
 vMin = 1
 
