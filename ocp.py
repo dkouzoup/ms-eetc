@@ -6,7 +6,7 @@ from train import *
 
 from track import computeDiscretizationPoints
 
-from utils import Options, var, postProcessDataFrame, splitLosses
+from utils import Options, var, postProcessDataFrame, splitLosses, computeTunnelFactor
 
 
 class OptionsCasadiSolver(Options):
@@ -194,9 +194,11 @@ class casadiSolver():
                 # gradient and curvature of current index
                 grad = self.points.iloc[i]['Gradient [permil]']/1e3
                 curv = self.points.iloc[i]['Curvature [1/m]']
+                crossSection = self.points.iloc[i]['CrossSection [m^2]']
+                tunnelFactor = computeTunnelFactor(crossSection, train)
 
                 # acceleration constraints
-                g += [trainModel.accelerationFun(ca.vertcat(time[i], velSq[i]), ca.vcat(u), grad, curv)]
+                g += [trainModel.accelerationFun(ca.vertcat(time[i], velSq[i]), ca.vcat(u), grad, curv, tunnelFactor)]
                 lbg += [accMin]
                 ubg += [accMax]
 

@@ -369,7 +369,7 @@ def convertUnit(value, unit):
     Convert from any known unit to internally used unit.
     """
 
-    if unit in {'m', 'm/s', 'permil', 'kg', 'W', 'N', 'm/s^2', '-', 'N/(m/s)', 'N/(m/s)^2', 'kg/m'}:
+    if unit in {'m', 'm/s', 'm^2', 'permil', 'kg', 'W', 'N', 'm/s^2', '-', 'N/(m/s)', 'N/(m/s)^2', 'kg/m'}:
 
         valueOut = value
 
@@ -477,6 +477,39 @@ def latexify():
         latexFound = False
 
     return latexFound
+
+
+def computeTunnelFactor(cross_section, train):
+
+    if cross_section == 0:
+        return 0 # no tunnel
+
+    total_mass = train.mass * train.rho
+    t_24 = train.t_24
+    t_40 = train.t_40
+
+    return t_24/total_mass if cross_section < 30 else t_40/total_mass
+
+
+def pickEquallySpacedPoints(startPoint, endPoint, numIntervals, requiredPoints):
+
+    np.random.seed(42)
+
+    if len(requiredPoints) > numIntervals + 1:
+        raise ValueError(f"Too many required points ({len(requiredPoints)}) for N.")
+
+    num_of_remaining_points = numIntervals + 1 - len(requiredPoints)
+    m = 1 # number of points to oversample
+
+    while True:
+        cand = np.linspace(startPoint, endPoint, num_of_remaining_points + m + 2)[1:-1]  # oversample to avoid overlaps
+        cand = np.round(cand, 0)
+        out = np.unique(np.r_[requiredPoints, cand])
+        cand_without_required = out[~np.isin(out, requiredPoints)]
+        if len(cand_without_required) >= num_of_remaining_points:
+            picked_points = np.random.choice(cand_without_required, size=num_of_remaining_points, replace=False)
+            return picked_points
+        m *= 2
 
 
 if __name__ == '__main__':

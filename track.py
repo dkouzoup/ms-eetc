@@ -1,12 +1,12 @@
 import json
-import math
 import os
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils import checkTTOBenchVersion, convertUnit
+from utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints
+
 
 def importTuples(tuples, xLabel, yLabels):
     """
@@ -95,7 +95,7 @@ def computeDiscretizationPoints(track, numIntervals):
 
     df1 = track.mergeDataFrames()
 
-    pos = np.linspace(0, track.length, numIntervals + 1 - (len(df1) - 1))
+    pos = pickEquallySpacedPoints(0, track.length, numIntervals, df1.index.to_numpy(dtype=float))
 
     df2 = pd.DataFrame({'position [m]':pos}).set_index('position [m]')
     df3 = df2.join(df1, how='outer').ffill()
@@ -149,6 +149,11 @@ class Track():
                                    data['curvatures']['units']['radius at end'] if 'curvatures' in data else "m",
                                    config['clothoidSamplingInterval'] if 'clothoidSamplingInterval' in config else None)
 
+        self.importTunnelTuples(data['tunnels']['values'] if 'tunnels' in data else [(0.0, 0.0, "infinity")],
+                                data['tunnels']['units']['length'] if 'tunnels' in data else 'm',
+                                data['tunnels']['units']['cross_section'] if 'tunnels' in data else 'm^2')
+
+
         numStops = len(data['stops']['values'])
         indxDeparture = config['from'] if 'from' in config else 0
         indxDestination = config['to'] if 'to' in config else numStops-1
@@ -193,6 +198,11 @@ class Track():
         return True if self.curvatures.shape[0] > 0 and checkDataFrame(self.curvatures, self.length) else False
 
 
+    def crossSectionsOk(self):
+
+        return True if self.crossSections.shape[0] > 0 and checkDataFrame(self.crossSections, self.length) else False
+
+
     def checkFields(self):
 
         if not self.lengthOk():
@@ -214,6 +224,10 @@ class Track():
         if not self.curvaturesOk():
 
             raise ValueError("Issue with track curvatures!")
+
+        if not self.crossSectionsOk():
+
+            raise ValueError("Issue with track cross sections!")
 
 
     def importGradientTuples(self, tuples, unit='permil'):
@@ -348,6 +362,49 @@ class Track():
         return result
 
 
+    def importTunnelTuples(self, tuples, unitLength='m', unitCrossSection='m^2'):
+
+        if not self.lengthOk():
+
+            raise ValueError("Cannot import tunnels without a valid track length!")
+
+        if unitLength not in {'m', 'km'} or unitCrossSection not in {'m^2'}:
+
+            raise ValueError("Specified tunnel units not supported!")
+
+        tuples = [(p, convertUnit(l, unitLength), convertUnit(c, unitCrossSection)) for p,l,c in tuples]
+        self.tunnels = importTuples(tuples, 'Position [m]', ['Length [m]', 'CrossSection [m^2]'])
+
+
+        # get end of tunnel positions and assign them a cross section of inf
+        positions = self.tunnels.index.astype(float)
+        tunnelLengths = self.tunnels["Length [m]"].astype(float)
+
+        endOfTunnelPositions = positions + tunnelLengths
+
+        # a tunnel may change its cross section, therefore some end of tunnel positions need to be removed
+        endOfTunnelPositions = [
+            e for e in endOfTunnelPositions
+            if not any(abs((p - e)) < 0.1 for p in positions)
+        ]
+
+        openTrack_df = pd.DataFrame({"Length [m]": 0.0, "CrossSection [m^2]": float("inf")}, index=endOfTunnelPositions)
+        openTrack_df.index.name = self.tunnels.index.name
+        self.tunnels = pd.concat([self.tunnels, openTrack_df]).sort_index()
+
+        if positions[0] != 0.0:
+            first_row = {"Position [m]": 0.0, "Length [m]": 0.0, "CrossSection [m^2]": float("inf")}
+            self.tunnels.loc[0] = first_row
+            self.tunnels = self.tunnels.sort_index()
+
+        self.tunnels.drop(columns=["Length [m]"], inplace=True)
+
+        self.crossSections = self.tunnels
+        del self.tunnels
+
+        checkDataFrame(self.crossSections, self.length)
+
+
     def reverse(self):
         # switch to opposite trip
 
@@ -368,6 +425,7 @@ class Track():
         self.gradients = -flipData(self.gradients)
         self.speedLimits = flipData(self.speedLimits)
         self.curvatures = -flipData(self.curvatures)
+        self.crossSections = flipData(self.crossSections)
 
         self.title = self.title + ' (reversed)'
 
@@ -380,7 +438,8 @@ class Track():
         """
 
         joinedGradientsAndSpeedLimits = self.gradients.join(self.speedLimits, how='outer').fillna(method='ffill')
-        return self.curvatures.join(joinedGradientsAndSpeedLimits, how='outer').fillna(method='ffill')
+        joined = self.curvatures.join(joinedGradientsAndSpeedLimits, how='outer').fillna(method='ffill')
+        return self.crossSections.join(joined, how='outer').fillna(method='ffill')
 
     def print(self):
         """
@@ -448,6 +507,7 @@ class Track():
         self.speedLimits = crop(self.speedLimits)
         self.gradients = crop(self.gradients)
         self.curvatures = crop(self.curvatures)
+        self.crossSections = crop(self.crossSections)
 
 
 if __name__ == '__main__':
