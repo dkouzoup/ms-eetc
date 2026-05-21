@@ -353,7 +353,7 @@ class TrainIntegrator():
 
                 vCurr = ca.sqrt(bf[idx])
                 vNext = ca.sqrt(bf[idx+1])
-                tApprox += 2*model.parameters[2]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
+                tApprox += 2*model.parameters[4]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
 
             eval = ca.vertcat(tApprox, bf[-1])
 
@@ -376,6 +376,7 @@ class TrainIntegrator():
         out = {}
         out['time'] = x1[0]
         out['velSquared'] = x1[1]
+        out['position'] = x1[2]
 
         return out
 
@@ -434,7 +435,7 @@ class TrainIntegrator():
         mdl = self.model
 
         bDot = mdl.ode[1]
-        eDot = mdl.rollingResistance*mdl.parameters[2]
+        eDot = mdl.rollingResistance*mdl.parameters[-1]
 
         x = ca.vertcat(mdl.states[1], ca.MX.sym('e'))
         p = ca.vertcat(mdl.controls, mdl.parameters)
@@ -564,6 +565,6 @@ if __name__ == '__main__':
     trainSpecs = Train(config={'id':'NL_intercity_VIRM6'})
     integrator = TrainIntegrator(trainSpecs.exportModel(), 'RK', optsDict={'numApproxSteps':2})
 
-    solution = integrator.solve(t0, v0**2, ds, f0, gradient=gd, curvature=cr)
+    solution = integrator.solve(t0, v0**2, ds, traction=f0, gradient=gd, curvature=cr)
 
     print(solution)
