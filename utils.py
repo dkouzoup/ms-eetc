@@ -542,6 +542,30 @@ def plotSpeedLimits(track, pos_adj, v_adj):
     plt.show()
 
 
+def plotGradients(track, pos_adj, g_adj, g_linear):
+
+    x = track.gradients.index.to_numpy(dtype=float)
+    g = track.gradients["Gradient [permil]"].to_numpy(dtype=float)
+
+    fig, ax = plt.subplots(figsize=(16, 8))
+
+    ax.step(x/1000, g, where='post', label="piecewise constant gradients")
+    ax.plot(pos_adj / 1000, g_adj, linestyle="--", label="train length averaged gradients")
+
+    g_computed = np.r_[g_adj[0], g_adj[:-1] + g_linear[:-1] * (pos_adj[1:] - pos_adj[:-1])]
+    ax.scatter(pos_adj / 1000, g_computed, marker="o", label="computed gradients")
+
+    ax.set_title("Gradients")
+    ax.set_xlabel("Position [km]")
+    ax.set_ylabel("Gradient [‰]")
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right")
+    ax.set_xlim(0, track.length / 1000)
+    ax.figure.tight_layout()
+
+    plt.show()
+
+
 if __name__ == '__main__':
 
     pass

@@ -233,8 +233,9 @@ class TrainModel():
 
         time = ca.MX.sym('time')                            # [s]
         velocitySquared = ca.MX.sym('velocitySquared')      # [m^2/s^2]
+        position = ca.MX.sym('position')                    # [m]
 
-        x = ca.vertcat(time, velocitySquared)
+        x = ca.vertcat(time, velocitySquared, position)
 
         # controls
 
@@ -245,17 +246,18 @@ class TrainModel():
 
         # parameters
 
-        gradient = ca.MX.sym('gradient')                    # [-]     -> values between [0,0.2]
-        curvature = ca.MX.sym('curvature')                  # [1/m]   -> values between [0,0.004]
-        tunnelFactor = ca.MX.sym('tunnelFactor')            # [1/m]
+        gradient = ca.MX.sym('gradient')                        # [-]     -> values between [0,0.2]
+        gradientLinearTerm = ca.MX.sym('gradientLinearTerm')    # [-]
+        curvature = ca.MX.sym('curvature')                      # [1/m]   -> values between [0,0.004]
+        tunnelFactor = ca.MX.sym('tunnelFactor')                # [1/m]
         ds = ca.MX.sym('ds')
 
-        p = ca.vertcat(gradient, curvature, tunnelFactor, ds)
+        p = ca.vertcat(gradient, gradientLinearTerm, curvature, tunnelFactor, ds)
 
         # ODE
 
         rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared                # [N/kg]
-        gradientResistance = g*gradient*(1/rho)                                                     # [N/kg]
+        gradientResistance = g*(1/rho)*(gradient+gradientLinearTerm*position)                                                  # [N/kg]
         curvatureResistance = ca.if_else(ca.fabs(curvature)<=1/300,
                                             g*0.5*ca.fabs(curvature)/(1-30*ca.fabs(curvature)),
                                             g*0.65*ca.fabs(curvature)/(1-55*ca.fabs(curvature))
@@ -266,17 +268,19 @@ class TrainModel():
 
         timeODE = 1/ca.sqrt(velocitySquared)
         velocityODE = 2*acceleration
+        positionODE = 1
 
         timeODE *= ds
         velocityODE *= ds
+        positionODE *= ds
 
-        fExplicit = ca.vertcat(timeODE, velocityODE)
+        fExplicit = ca.vertcat(timeODE, velocityODE, positionODE)
 
         # model
 
         self.ode = fExplicit
         self.acceleration = acceleration
-        self.accelerationFun = ca.Function('a', [x, u, gradient, curvature, tunnelFactor], [acceleration])
+        self.accelerationFun = ca.Function('a', [x, u, gradient, gradientLinearTerm, curvature, tunnelFactor], [acceleration])
         self.rollingResistance = rollingResistance
         self.parameters = p
         self.controls = u
@@ -356,7 +360,7 @@ class TrainIntegrator():
             self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('ds')], [eval])
 
 
-    def solve(self, time, velocitySquared, ds, traction=0, pnBrake=0, gradient=0, curvature=0, tunnelFactor=0):
+    def solve(self, time, velocitySquared, ds, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, tunnelFactor=0):
 
         withPnBrake = self.model.withPnBrake
 
@@ -364,9 +368,9 @@ class TrainIntegrator():
 
             raise ValueError("Cannot define value for pneumatic braking when this brake is deactivated!")
 
-        x0 = ca.vertcat(time, velocitySquared)
+        x0 = ca.vertcat(time, velocitySquared, position)
         u0 = ca.vertcat(traction, pnBrake if withPnBrake else [])
-        p0 = ca.vertcat(gradient, curvature, tunnelFactor, ds)
+        p0 = ca.vertcat(gradient, gradientLinearTerm, curvature, tunnelFactor, ds)
         x1 = self.eval(x0, ca.vertcat(u0, p0), 1)
 
         out = {}
@@ -391,7 +395,7 @@ class TrainIntegrator():
 
         dt = ca.MX.sym('dt')
         x = ca.vertcat(vel, ca.MX.sym('eTr'), ca.MX.sym('eBr'))
-        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], dt)
+        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[2], dt)
         xdot = ca.vertcat(velDot, energyTrDot, energyBrDot)
 
         if solver == 'RK':

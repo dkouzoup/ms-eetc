@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints, plotSpeedLimits
+from utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints, plotSpeedLimits, plotGradients
 
 
 def importTuples(tuples, xLabel, yLabels):
@@ -513,6 +513,7 @@ class Track():
     def updateTrainLengthDependentValues(self, train):
 
         self.updateSpeedLimitsToTrainLength(train.length)
+        self.updateGradientsToTrainLength(train.length)
 
 
     def updateSpeedLimitsToTrainLength(self, trainLength):
@@ -550,6 +551,51 @@ class Track():
                 {"Speed limit [m/s]": v_adj},
                 index=pos_adj,
             )
+
+
+    def updateGradientsToTrainLength(self, trainLength):
+
+        g = self.gradients["Gradient [permil]"].to_numpy(dtype=float)
+        pos = self.gradients.index.to_numpy(dtype=float)
+        slopes = np.r_[0,(g[1:]-g[:-1])/trainLength]
+
+        if len(pos) > 1:
+
+            pos_adj = np.sort(np.r_[pos, pos + trainLength])
+
+            pos_adj = pos_adj[pos_adj < self.length]
+
+            g_adj = [g[0]]
+            g_linear = [0]
+
+            for idx in range(1,len(pos_adj)):
+
+                currentPosition = pos_adj[idx]
+                previousPosition = pos_adj[idx - 1]
+
+                currentGradient = g_adj[idx-1] + (currentPosition-previousPosition)*g_linear[idx-1]
+
+                epsilon = 0.001
+                list_indices = []
+
+                for idx2 in range(len(pos)-1):
+
+                    if currentPosition - trainLength + epsilon < pos[idx2] < currentPosition + epsilon:
+                        list_indices.append(idx2)
+
+                currentLinearTerm = sum(slopes[list_indices])
+
+                g_adj.append(currentGradient)
+                g_linear.append(currentLinearTerm)
+
+            plotGradients(self, np.asarray(pos_adj, dtype=float), np.asarray(g_adj, dtype=float), np.asarray(g_linear, dtype=float))
+
+            self.gradients = pd.DataFrame(
+                {"Gradient [permil]": g_adj, "Gradient linear term [permil]": g_linear},
+                index=pos_adj,
+            )
+
+
 
 
 if __name__ == '__main__':
