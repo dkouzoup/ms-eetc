@@ -247,7 +247,7 @@ class TrainModel():
         # parameters
 
         gradient = ca.MX.sym('gradient')                        # [-]     -> values between [0,0.2]
-        gradientLinearTerm = ca.MX.sym('gradientLinearTerm')    # [-]
+        gradientLinearTerm = ca.MX.sym('gradientLinearTerm')    # [1/m]
         curvature = ca.MX.sym('curvature')                      # [1/m]   -> values between [0,0.004]
         tunnelFactor = ca.MX.sym('tunnelFactor')                # [1/m]
         ds = ca.MX.sym('ds')
@@ -311,7 +311,7 @@ class TrainIntegrator():
 
             opts = OptionsRK(optsDict)
 
-            ode = model.ode if opts.numApproxSteps == 0 else model.ode[1]
+            ode = model.ode if opts.numApproxSteps == 0 else model.ode[1] # todo: fix
             states = model.states if opts.numApproxSteps == 0 else model.states[1]
 
             self.eval = ca.simpleRK(ca.Function('ode', [states, params], [ode]), opts.numSteps, opts.order)
@@ -396,7 +396,7 @@ class TrainIntegrator():
 
         dt = ca.MX.sym('dt')
         x = ca.vertcat(vel, ca.MX.sym('eTr'), ca.MX.sym('eBr'))
-        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], mdl.parameters[2], dt)
+        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], mdl.parameters[2], mdl.parameters[3], dt)
         xdot = ca.vertcat(velDot, energyTrDot, energyBrDot)
 
         if solver == 'RK':
@@ -419,11 +419,11 @@ class TrainIntegrator():
             raise ValueError("Unknown solver!")
 
 
-    def calcLosses(self, velocity, dt, traction=0, pnBrake=0, gradient=0, curvature=0, tunnelFactor=0):
+    def calcLosses(self, velocity, dt, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, tunnelFactor=0):
 
         mdl = self.model
 
-        out = self.lossesIntegrator(ca.vertcat(velocity, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, curvature, tunnelFactor), dt)
+        out = self.lossesIntegrator(ca.vertcat(velocity, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, gradientLinearTerm, curvature, tunnelFactor), dt)
 
         lossesTr, lossesRgb = out[1], out[2]
 
@@ -459,12 +459,12 @@ class TrainIntegrator():
             raise ValueError("Unknown solver!")
 
 
-    def calcRollingResistance(self, velocity, ds, traction=0, pnBrake=0, gradient=0, curvature=0, tunnelFactor=0):
+    def calcRollingResistance(self, velocity, ds, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, tunnelFactor=0):
 
         mdl = self.model
 
-        out = self.rollingResistanceIntegrator(ca.vertcat(velocity**2, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient,
-                                                                                      curvature, tunnelFactor, ds), 1)
+        out = self.rollingResistanceIntegrator(ca.vertcat(velocity**2, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [],
+                                                                                      gradient, gradientLinearTerm, curvature, tunnelFactor, ds), 1)
 
         losses = out[1]
 

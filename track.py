@@ -513,7 +513,7 @@ class Track():
     def updateTrainLengthDependentValues(self, train):
 
         self.updateSpeedLimitsToTrainLength(train.length)
-        self.updateGradientsToTrainLength(train.length)
+        # self.updateGradientsToTrainLength(train.length)
 
 
     def updateSpeedLimitsToTrainLength(self, trainLength):
