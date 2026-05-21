@@ -65,6 +65,8 @@ class Train():
             raise ValueError("Redundant fields in train configuration: {}!".format(', '.join(set(config) - usedFields)))
 
         # read data
+        self.length = convertUnit(data['length']['value'], data['length']['unit'])  # train length [m]
+
         self.mass = convertUnit(data['mass']['value'], data['mass']['unit'])  # train mass [kg]
 
         self.rho = convertUnit(data['rho']['value'], data['rho']['unit'])  # rotating-mass factor [-]

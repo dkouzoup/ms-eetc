@@ -7,6 +7,9 @@ import casadi as ca
 from types import MethodType
 from distutils.spawn import find_executable
 
+from matplotlib import pyplot as plt
+
+
 def var(tag, dim=None):
     "Wrapper to create symbolic variables in casadi."
 
@@ -510,6 +513,33 @@ def pickEquallySpacedPoints(startPoint, endPoint, numIntervals, requiredPoints):
             picked_points = np.random.choice(cand_without_required, size=num_of_remaining_points, replace=False)
             return picked_points
         m *= 2
+
+
+def plotSpeedLimits(track, pos_adj, v_adj):
+
+    v_limits = track.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
+    pos_v_limits = track.speedLimits.index.to_numpy(dtype=float)
+
+    v_limits = np.append(v_limits, v_limits[-1])
+    pos_v_limits = np.append(pos_v_limits, track.length)
+
+    v_adj = np.append(v_adj, v_adj[-1])
+    pos_adj = np.append(pos_adj, track.length)
+
+    fig, ax = plt.subplots(figsize=(16, 8))
+
+    ax.step(pos_v_limits / 1000, v_limits  * 3.6, where='post', label="piecewise constant speed limit")
+    ax.step(pos_adj/1000, v_adj * 3.6, where='post', linestyle="--", label="train length adjusted speed limit")
+
+    ax.set_title("Speed Limits")
+    ax.set_xlabel('Position [km]')
+    ax.set_ylabel('Velocity [km/h]')
+    ax.grid(True, which='both', linestyle='--', alpha=0.5)
+    ax.legend(loc="upper right")
+    ax.set_xlim(0, track.length / 1000)
+    ax.figure.tight_layout()
+
+    plt.show()
 
 
 if __name__ == '__main__':

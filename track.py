@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints
+from utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints, plotSpeedLimits
 
 
 def importTuples(tuples, xLabel, yLabels):
@@ -508,6 +508,48 @@ class Track():
         self.gradients = crop(self.gradients)
         self.curvatures = crop(self.curvatures)
         self.crossSections = crop(self.crossSections)
+
+
+    def updateTrainLengthDependentValues(self, train):
+
+        self.updateSpeedLimitsToTrainLength(train.length)
+
+
+    def updateSpeedLimitsToTrainLength(self, trainLength):
+
+        v = self.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
+        pos = self.speedLimits.index.to_numpy(dtype=float)
+
+        if len(pos) > 1:
+
+            pos_adj = []
+            v_adj = []
+
+            for i in range(len(pos)):
+                new_pos = pos[i]
+
+                # Delay speed increases by train length
+                if i > 0 and v[i] > v[i - 1]:
+                    new_pos += trainLength
+
+                # Skip points outside the track
+                if new_pos >= self.length:
+                    continue
+
+                # Remove previous points that are now after this point
+                while pos_adj and pos_adj[-1] > new_pos:
+                    pos_adj.pop()
+                    v_adj.pop()
+
+                pos_adj.append(new_pos)
+                v_adj.append(v[i])
+
+            plotSpeedLimits(self, np.asarray(pos_adj, dtype=float), np.asarray(v_adj, dtype=float))
+
+            self.speedLimits = pd.DataFrame(
+                {"Speed limit [m/s]": v_adj},
+                index=pos_adj,
+            )
 
 
 if __name__ == '__main__':
