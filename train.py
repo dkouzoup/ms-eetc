@@ -347,7 +347,7 @@ class TrainIntegrator():
 
                 vCurr = ca.sqrt(bf[idx])
                 vNext = ca.sqrt(bf[idx+1])
-                tApprox += 2*model.parameters[2]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
+                tApprox += 2*model.parameters[-1]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
 
             eval = ca.vertcat(tApprox, bf[-1])
 
@@ -389,7 +389,7 @@ class TrainIntegrator():
 
         dt = ca.MX.sym('dt')
         x = ca.vertcat(vel, ca.MX.sym('eTr'), ca.MX.sym('eBr'))
-        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], dt)
+        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], mdl.parameters[2], dt)
         xdot = ca.vertcat(velDot, energyTrDot, energyBrDot)
 
         if solver == 'RK':
@@ -428,7 +428,7 @@ class TrainIntegrator():
         mdl = self.model
 
         bDot = mdl.ode[1]
-        eDot = mdl.rollingResistance*mdl.parameters[2]
+        eDot = mdl.rollingResistance*mdl.parameters[-1]
 
         x = ca.vertcat(mdl.states[1], ca.MX.sym('e'))
         p = ca.vertcat(mdl.controls, mdl.parameters)
