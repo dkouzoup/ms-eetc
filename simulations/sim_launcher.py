@@ -17,7 +17,7 @@ if __name__ == '__main__':
     track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
     track.updateTrainLengthDependentValues(train)
 
-    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
+    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':0}, 'energyOptimal':True}
 
     solver = casadiSolver(train, track, opts)
 

@@ -394,16 +394,18 @@ class TrainIntegrator():
 
         mdl = self.model
         vel = ca.MX.sym('v')
+        pos = ca.MX.sym('pos')
 
         velDot = ca.substitute(mdl.acceleration, mdl.states[1], vel**2)
+        velDot = ca.substitute(velDot, mdl.states[2], pos)
 
         energyTrDot = lossesTrFun(mdl.controls[0]*totalMass, vel)/totalMass  # tractive energy
         energyBrDot = lossesRgbFun(mdl.controls[0]*totalMass, vel)/totalMass  # braking energy
 
         dt = ca.MX.sym('dt')
-        x = ca.vertcat(vel, ca.MX.sym('eTr'), ca.MX.sym('eBr'))
-        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], mdl.parameters[2], mdl.parameters[3], dt)
-        xdot = ca.vertcat(velDot, energyTrDot, energyBrDot)
+        x = ca.vertcat(vel, pos, ca.MX.sym('eTr'), ca.MX.sym('eBr'))
+        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], mdl.parameters[2], mdl.parameters[3], mdl.parameters[4], dt)
+        xdot = ca.vertcat(velDot, vel, energyTrDot, energyBrDot)
 
         if solver == 'RK':
 
@@ -425,11 +427,11 @@ class TrainIntegrator():
             raise ValueError("Unknown solver!")
 
 
-    def calcLosses(self, velocity, dt, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
+    def calcLosses(self, velocity, dt, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
 
         mdl = self.model
 
-        out = self.lossesIntegrator(ca.vertcat(velocity, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor), dt)
+        out = self.lossesIntegrator(ca.vertcat(velocity, position, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor), dt)
 
         lossesTr, lossesRgb = out[1], out[2]
 
@@ -441,11 +443,12 @@ class TrainIntegrator():
         mdl = self.model
 
         bDot = mdl.ode[1]
+        sDot = mdl.ode[2]
         eDot = mdl.rollingResistance*mdl.parameters[-1]
 
-        x = ca.vertcat(mdl.states[1], ca.MX.sym('e'))
+        x = ca.vertcat(mdl.states[1], mdl.states[2], ca.MX.sym('e'))
         p = ca.vertcat(mdl.controls, mdl.parameters)
-        xdot = ca.vertcat(bDot, eDot)
+        xdot = ca.vertcat(bDot, sDot, eDot)
 
         if solver == 'RK':
 
@@ -465,14 +468,14 @@ class TrainIntegrator():
             raise ValueError("Unknown solver!")
 
 
-    def calcRollingResistance(self, velocity, ds, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
+    def calcRollingResistance(self, velocity, ds, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
 
         mdl = self.model
 
-        out = self.rollingResistanceIntegrator(ca.vertcat(velocity**2, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [],
+        out = self.rollingResistanceIntegrator(ca.vertcat(velocity**2, position, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [],
                                                                                       gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor, ds), 1)
 
-        losses = out[1]
+        losses = out[2]
 
         return losses, ca.sqrt(out[0])
 
