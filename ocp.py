@@ -196,11 +196,12 @@ class casadiSolver():
                 # gradLinearTerm = 0
                 gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil]"]/1e3
                 curv = self.points.iloc[i]['Curvature [1/m]']
+                curvLinearTerm = self.points.iloc[i]["Curvature linear term [1/m^2]"]
                 crossSection = self.points.iloc[i]['CrossSection [m^2]']
                 tunnelFactor = computeTunnelFactor(crossSection, train)
 
                 # acceleration constraints
-                g += [trainModel.accelerationFun(ca.vertcat(time[i], velSq[i], 0), ca.vcat(u), grad, gradLinearTerm, curv, tunnelFactor)]
+                g += [trainModel.accelerationFun(ca.vertcat(time[i], velSq[i], 0), ca.vcat(u), grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)]
                 lbg += [accMin]
                 ubg += [accMax]
 

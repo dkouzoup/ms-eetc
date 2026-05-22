@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints, plotSpeedLimits, plotGradients
+from utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints, plotSpeedLimits, plotGradients, \
+    plotCurvatures
 
 
 def importTuples(tuples, xLabel, yLabels):
@@ -514,6 +515,7 @@ class Track():
 
         self.updateSpeedLimitsToTrainLength(train.length)
         self.updateGradientsToTrainLength(train.length)
+        self.updateCurvaturesToTrainLength(train.length)
 
 
     def updateSpeedLimitsToTrainLength(self, trainLength):
@@ -595,7 +597,47 @@ class Track():
                 index=pos_adj,
             )
 
+    def updateCurvaturesToTrainLength(self, trainLength):
 
+        c = self.curvatures["Curvature [1/m]"].to_numpy(dtype=float)
+        pos = self.curvatures.index.to_numpy(dtype=float)
+        slopes = np.r_[0, (c[1:] - c[:-1]) / trainLength]
+
+        if len(pos) > 1:
+
+            pos_adj = np.sort(np.r_[pos, pos + trainLength])
+
+            pos_adj = pos_adj[pos_adj < self.length]
+
+            c_adj = [c[0]]
+            c_linear = [0]
+
+            for idx in range(1,len(pos_adj)):
+
+                currentPosition = pos_adj[idx]
+                previousPosition = pos_adj[idx - 1]
+
+                currentCurvature = c_adj[idx-1] + (currentPosition-previousPosition)*c_linear[idx-1]
+
+                epsilon = 0.001
+                list_indices = []
+
+                for idx2 in range(len(pos)-1):
+
+                    if currentPosition - trainLength + epsilon < pos[idx2] < currentPosition + epsilon:
+                        list_indices.append(idx2)
+
+                currentLinearTerm = sum(slopes[list_indices])
+
+                c_adj.append(currentCurvature)
+                c_linear.append(currentLinearTerm)
+
+            # plotCurvatures(self, np.asarray(pos_adj, dtype=float), np.asarray(c_adj, dtype=float), np.asarray(c_linear, dtype=float))
+
+            self.curvatures = pd.DataFrame(
+                {"Curvature [1/m]": c_adj, "Curvature linear term [1/m^2]": c_linear},
+                index=pos_adj,
+            )
 
 
 if __name__ == '__main__':
