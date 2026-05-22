@@ -258,7 +258,7 @@ class TrainModel():
 
         rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared                # [N/kg]
         gradientResistance = g*(1/rho)*(gradient+gradientLinearTerm*position)                                                  # [N/kg]
-        curvatureResistance = ca.if_else(ca.fabs(curvature)<=1/300,
+        curvatureResistance = (1/rho)*ca.if_else(ca.fabs(curvature)<=1/300,
                                             g*0.5*ca.fabs(curvature)/(1-30*ca.fabs(curvature)),
                                             g*0.65*ca.fabs(curvature)/(1-55*ca.fabs(curvature))
                                          )                                                          # [N/kg]
@@ -311,8 +311,12 @@ class TrainIntegrator():
 
             opts = OptionsRK(optsDict)
 
-            ode = model.ode if opts.numApproxSteps == 0 else model.ode[1] # todo: fix
-            states = model.states if opts.numApproxSteps == 0 else model.states[1]
+            if opts.numApproxSteps == 0:
+                ode = model.ode
+                states = model.states
+            else:
+                ode = ca.vertcat(model.ode[1], model.ode[2])
+                states = ca.vertcat(model.states[1], model.states[2])
 
             self.eval = ca.simpleRK(ca.Function('ode', [states, params], [ode]), opts.numSteps, opts.order)
 
@@ -320,10 +324,14 @@ class TrainIntegrator():
 
             opts = OptionsIRK(optsDict)
 
-            ode = model.ode if opts.numApproxSteps == 0 else model.ode[1]
-            states = model.states if opts.numApproxSteps == 0 else model.states[1]
+            if opts.numApproxSteps == 0:
+                ode = model.ode
+                states = model.states
+            else:
+                ode = ca.vertcat(model.ode[1], model.ode[2])
+                states = ca.vertcat(model.states[1], model.states[2])
 
-            self.eval = ca.simpleIRK(ca.Function('ode', [states, params], [ode]), opts.numSteps, opts.order, opts.collMethod, 'fast_newton', {'max_iter':opts.maxIter, 'jit':opts.jit, 'error_on_fail':False})
+            self.eval = ca.simpleIRK(ca.Function('ode', [states, params], [ode]), opts.numSteps, opts.order, opts.collMethod, 'fast_newton', {'max_iter': opts.maxIter, 'jit': opts.jit, 'error_on_fail': False})
 
         elif solver == 'CVODES':
 
@@ -333,7 +341,7 @@ class TrainIntegrator():
             states = model.states
 
             t0, tf = 0, 1
-            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':model.states, 'p':params, 'ode':model.ode}, t0, tf, {'abstol':opts.absTol, 'reltol':opts.relTol})
+            cvodesFun = ca.integrator('integrator', 'cvodes', {'x': model.states, 'p': params, 'ode': model.ode}, t0, tf, {'abstol': opts.absTol, 'reltol': opts.relTol})
 
             self.eval = lambda x, p, dummy: cvodesFun(x0=x, p=p)['xf']
 
@@ -343,19 +351,19 @@ class TrainIntegrator():
 
             evalPoints = [0] + [i/ns for i in range(1, ns+1)]
 
-            b0 = model.states[1]
+            z0 = ca.vertcat(model.states[1], model.states[2])
             p0 = ca.vertcat(model.controls, model.parameters)
-            bf = self.eval(b0, p0, ca.hcat(evalPoints))
+            zf = self.eval(z0, p0, ca.hcat(evalPoints))
 
             tApprox = model.states[0]
 
+            epsVelSq = 0.0001
             for idx in range(ns):
-
-                vCurr = ca.sqrt(bf[idx])
-                vNext = ca.sqrt(bf[idx+1])
+                vCurr = ca.sqrt(ca.fmax(zf[0, idx], epsVelSq))
+                vNext = ca.sqrt(ca.fmax(zf[0, idx + 1], epsVelSq))
                 tApprox += 2*model.parameters[-1]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
 
-            eval = ca.vertcat(tApprox, bf[-1])
+            eval = ca.vertcat(tApprox, zf[0, ns], zf[1, ns])
 
             self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('ds')], [eval])
 

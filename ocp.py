@@ -193,8 +193,8 @@ class casadiSolver():
 
                 # gradient and curvature of current index
                 grad = self.points.iloc[i]['Gradient [permil]']/1e3
-                gradLinearTerm = 0
-                # gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil]"]/1e3
+                # gradLinearTerm = 0
+                gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil]"]/1e3
                 curv = self.points.iloc[i]['Curvature [1/m]']
                 crossSection = self.points.iloc[i]['CrossSection [m^2]']
                 tunnelFactor = computeTunnelFactor(crossSection, train)
@@ -326,7 +326,8 @@ class casadiSolver():
         # initial guess
         # NOTE: good idea vel0 to be compatible with f0 (power-wise) to avoid nans at first iteration
 
-        vel0 = (60/3.6)**2
+        vel_avg = (self.points.index[-1]-self.points.index[0])/(terminalTime-initialTime)
+        vel0 = vel_avg*vel_avg
         dt = (terminalTime - initialTime)/self.numIntervals
         t0 = initialTime
 

@@ -513,7 +513,7 @@ class Track():
     def updateTrainLengthDependentValues(self, train):
 
         self.updateSpeedLimitsToTrainLength(train.length)
-        # self.updateGradientsToTrainLength(train.length)
+        self.updateGradientsToTrainLength(train.length)
 
 
     def updateSpeedLimitsToTrainLength(self, trainLength):
@@ -545,7 +545,7 @@ class Track():
                 pos_adj.append(new_pos)
                 v_adj.append(v[i])
 
-            plotSpeedLimits(self, np.asarray(pos_adj, dtype=float), np.asarray(v_adj, dtype=float))
+            # plotSpeedLimits(self, np.asarray(pos_adj, dtype=float), np.asarray(v_adj, dtype=float))
 
             self.speedLimits = pd.DataFrame(
                 {"Speed limit [m/s]": v_adj},
@@ -588,7 +588,7 @@ class Track():
                 g_adj.append(currentGradient)
                 g_linear.append(currentLinearTerm)
 
-            plotGradients(self, np.asarray(pos_adj, dtype=float), np.asarray(g_adj, dtype=float), np.asarray(g_linear, dtype=float))
+            # plotGradients(self, np.asarray(pos_adj, dtype=float), np.asarray(g_adj, dtype=float), np.asarray(g_linear, dtype=float))
 
             self.gradients = pd.DataFrame(
                 {"Gradient [permil]": g_adj, "Gradient linear term [permil]": g_linear},
