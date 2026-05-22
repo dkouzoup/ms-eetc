@@ -433,7 +433,7 @@ class TrainIntegrator():
 
         out = self.lossesIntegrator(ca.vertcat(velocity, position, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor), dt)
 
-        lossesTr, lossesRgb = out[1], out[2]
+        lossesTr, lossesRgb = out[2], out[3]
 
         return lossesTr, lossesRgb
 
