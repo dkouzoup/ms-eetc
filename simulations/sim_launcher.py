@@ -10,7 +10,7 @@ if __name__ == '__main__':
     endPosition = 20000     # [m]
     duration = 60*20        # [s]
 
-    train = Train(config={'id':'SBB_Flirt_2'}, pathJSON='../trains')
+    train = Train(config={'id':'Flirt_Tpf'}, pathJSON='../trains')
 
     track = Track(config={'id':'CH_ZH_LU'}, pathJSON='../tracks')
     # track = Track(config={'id':'CH_StGallen_Wil'}, pathJSON='../tracks')

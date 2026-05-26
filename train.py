@@ -113,14 +113,17 @@ class Train():
 
         if "tunnel resistance" in data:
 
-            tunnel_data = data["tunnel resistance"] # additive aerodynamic tunnel drag [kg/m] as dict per tunnel cross section [m^2]
+            tunnel_data = data["tunnel resistance"] # additive aerodynamic tunnel drag as dict per tunnel cross section
+
+            cross_section_unit = tunnel_data["units"]["cross section"] # tunnel cross section [m^2]
+            resistance_unit = tunnel_data["units"]["resistance (or similar)"] # resistance coefficient [kg/m]
 
             self.tunnelCoefficients = {
-                convertUnit(item["cross section"], tunnel_data["cross section unit"]): convertUnit(
-                    item["value"],
-                    tunnel_data["unit"]
+                convertUnit(cross_section, cross_section_unit): convertUnit(
+                    resistance,
+                    resistance_unit
                 )
-                for item in tunnel_data["values"]
+                for cross_section, resistance in tunnel_data["values"]
             }
 
         else:
