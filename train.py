@@ -30,7 +30,7 @@ class Train():
 
             data = json.load(file)
 
-        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3'])
+        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3', '1.4'])
 
         # overwrite json data with config values if applicable
 
@@ -97,10 +97,6 @@ class Train():
 
         self.r2 = convertUnit(data['rolling resistance r2']['value'], data['rolling resistance r2']['unit'])  # quadratic term [N/(m/s)^2]
 
-        self.t_24 = convertUnit(data['tunnel resistance 24 m^2']['value'], data['tunnel resistance 24 m^2']['unit'])  # [kg/m]
-
-        self.t_40 = convertUnit(data['tunnel resistance 40 m^2']['value'], data['tunnel resistance 40 m^2']['unit'])  # [kg/m]
-
         # TODO: unify with case of dynamic efficiency
         if 'efficiency traction' in data or 'efficiency reg brake' in data:
 
@@ -114,6 +110,22 @@ class Train():
 
             self.etaTraction = convertUnit(data['efficiency traction']['value'], data['efficiency traction']['unit'])
             self.etaRgBrake = convertUnit(data['efficiency reg brake']['value'], data['efficiency reg brake']['unit'])
+
+        if "tunnel resistance" in data:
+
+            tunnel_data = data["tunnel resistance"] # additive aerodynamic tunnel drag [kg/m] as dict per tunnel cross section [m^2]
+
+            self.tunnelCoefficients = {
+                convertUnit(item["cross section"], tunnel_data["cross section unit"]): convertUnit(
+                    item["value"],
+                    tunnel_data["unit"]
+                )
+                for item in tunnel_data["values"]
+            }
+
+        else:
+
+            self.tunnelCoefficients = {}
 
         self.checkFields()
 
