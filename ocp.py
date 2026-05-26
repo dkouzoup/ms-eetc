@@ -27,6 +27,8 @@ class OptionsCasadiSolver(Options):
 
         self.integrateLosses = False  # integrate losses or take mid-point rule
 
+        self.withTrainLengthDependentTrackAttributes = False
+
         self.chooseClosestTunnelCrossSection = True # if exact tunnel cross section is not specified in train tunnel resistances, choose the closest value
 
         super().__init__(paramsDict)
@@ -123,7 +125,7 @@ class casadiSolver():
 
         # track parameters
 
-        self.points = computeDiscretizationPoints(track, numIntervals)
+        self.points = computeDiscretizationPoints(track, numIntervals, opts)
         self.steps = np.diff(self.points.index)
 
         # real-time parameters
@@ -195,12 +197,12 @@ class casadiSolver():
 
                 # gradient and curvature of current index
                 grad = self.points.iloc[i]['Gradient [permil]']/1e3
-                # gradLinearTerm = 0
-                gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil]"]/1e3
+                gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil/m]"]/1e3
                 curv = self.points.iloc[i]['Curvature [1/m]']
                 curvLinearTerm = self.points.iloc[i]["Curvature linear term [1/m^2]"]
                 crossSection = self.points.iloc[i]['CrossSection [m^2]']
                 tunnelFactor = computeTunnelFactor(crossSection, train, opts)
+                print(tunnelFactor)
 
                 # acceleration constraints
                 g += [trainModel.accelerationFun(ca.vertcat(time[i], velSq[i], 0), ca.vcat(u), grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)]
@@ -209,7 +211,8 @@ class casadiSolver():
 
                 # coupling constraints
                 out = trainIntegrator.solve(time=time[i], velocitySquared=velSq[i], ds=self.steps[i],
-                    traction=Fel[i], pnBrake=Fpb[i], gradient=grad, curvature=curv)
+                    traction=Fel[i], pnBrake=Fpb[i], gradient=grad, gradientLinearTerm=curvLinearTerm, curvature=curv,
+                                            curvatureLinearTerm=curvLinearTerm, tunnelFactor=tunnelFactor)
 
                 xNxt1 = ca.vertcat(time[i+1], velSq[i+1])
                 xNxt2 = ca.vertcat(out['time'], out['velSquared'])
@@ -329,7 +332,7 @@ class casadiSolver():
         # initial guess
         # NOTE: good idea vel0 to be compatible with f0 (power-wise) to avoid nans at first iteration
 
-        vel_avg = (self.points.index[-1]-self.points.index[0])/(terminalTime-initialTime)
+        vel_avg = (self.points.index[-1]-self.points.index[0])/(terminalTime-initialTime) * 0.95
         vel0 = vel_avg*vel_avg
         dt = (terminalTime - initialTime)/self.numIntervals
         t0 = initialTime

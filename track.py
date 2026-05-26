@@ -89,7 +89,7 @@ def computeAltitude(gradients, length, altitudeStart=0):
     return df
 
 
-def computeDiscretizationPoints(track, numIntervals):
+def computeDiscretizationPoints(track, numIntervals, opts):
     """
     Compute the space discretization points based on track characteristics and horizon length.
     """
@@ -105,26 +105,32 @@ def computeDiscretizationPoints(track, numIntervals):
 
         raise ValueError("Wrong number of computed discretization intervals!")
 
-    # adapt constant track attribute terms
+    if opts.withTrainLengthDependentTrackAttributes:
+        # adapt constant track attribute terms to new shooting nodes
 
-    positions = df3.index.to_numpy(dtype=float)
-    grads = [df3["Gradient [permil]"].iloc[0]]
-    curvs = [df3["Curvature [1/m]"].iloc[0]]
+        positions = df3.index.to_numpy(dtype=float)
+        grads = [df3["Gradient [permil]"].iloc[0]]
+        curvs = [df3["Curvature [1/m]"].iloc[0]]
 
-    for idx in range(1, numIntervals+1):
+        for idx in range(1, numIntervals+1):
 
-        if np.isclose(df3["Gradient [permil]"].iloc[idx-1], df3["Gradient [permil]"].iloc[idx]):
-            grads.append(grads[-1] + (positions[idx] -  positions[idx - 1]) * df3["Gradient linear term [permil]"].iloc[idx - 1])
-        else:
-            grads.append(df3["Gradient [permil]"].iloc[idx])
+            if np.isclose(df3["Gradient [permil]"].iloc[idx-1], df3["Gradient [permil]"].iloc[idx]):
+                grads.append(grads[-1] + (positions[idx] -  positions[idx - 1]) * df3["Gradient linear term [permil/m]"].iloc[idx - 1])
+            else:
+                grads.append(df3["Gradient [permil]"].iloc[idx])
 
-        if np.isclose(df3["Curvature [1/m]"].iloc[idx - 1], df3["Curvature [1/m]"].iloc[idx]):
-            curvs.append(curvs[-1] + (positions[idx] - positions[idx - 1]) * df3["Curvature linear term [1/m^2]"].iloc[idx - 1])
-        else:
-            curvs.append(df3["Curvature [1/m]"].iloc[idx])
+            if np.isclose(df3["Curvature [1/m]"].iloc[idx - 1], df3["Curvature [1/m]"].iloc[idx]):
+                curvs.append(curvs[-1] + (positions[idx] - positions[idx - 1]) * df3["Curvature linear term [1/m^2]"].iloc[idx - 1])
+            else:
+                curvs.append(df3["Curvature [1/m]"].iloc[idx])
 
-    df3["Gradient [permil]"] = grads
-    df3["Curvature [1/m]"] = curvs
+        df3["Gradient [permil]"] = grads
+        df3["Curvature [1/m]"] = curvs
+
+    else:
+
+        df3["Gradient linear term [permil/m]"] =  np.zeros(len(df3))
+        df3["Curvature linear term [1/m^2]"] =  np.zeros(len(df3))
 
     return df3
 
@@ -154,7 +160,7 @@ class Track():
 
             data = json.load(file)
 
-        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3'])
+        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3', '1.4'])
 
         # read data
         self.length = convertUnit(data['stops']['values'][-1], data['stops']['unit'])
@@ -173,7 +179,7 @@ class Track():
 
         self.importTunnelTuples(data['tunnels']['values'] if 'tunnels' in data else [(0.0, 0.0, "infinity")],
                                 data['tunnels']['units']['length'] if 'tunnels' in data else 'm',
-                                data['tunnels']['units']['cross_section'] if 'tunnels' in data else 'm^2')
+                                data['tunnels']['units']['cross section'] if 'tunnels' in data else 'm^2')
 
 
         numStops = len(data['stops']['values'])
