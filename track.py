@@ -105,6 +105,27 @@ def computeDiscretizationPoints(track, numIntervals):
 
         raise ValueError("Wrong number of computed discretization intervals!")
 
+    # adapt constant track attribute terms
+
+    positions = df3.index.to_numpy(dtype=float)
+    grads = [df3["Gradient [permil]"].iloc[0]]
+    curvs = [df3["Curvature [1/m]"].iloc[0]]
+
+    for idx in range(1, numIntervals+1):
+
+        if np.isclose(df3["Gradient [permil]"].iloc[idx-1], df3["Gradient [permil]"].iloc[idx]):
+            grads.append(grads[-1] + (positions[idx] -  positions[idx - 1]) * df3["Gradient linear term [permil]"].iloc[idx - 1])
+        else:
+            grads.append(df3["Gradient [permil]"].iloc[idx])
+
+        if np.isclose(df3["Curvature [1/m]"].iloc[idx - 1], df3["Curvature [1/m]"].iloc[idx]):
+            curvs.append(curvs[-1] + (positions[idx] - positions[idx - 1]) * df3["Curvature linear term [1/m^2]"].iloc[idx - 1])
+        else:
+            curvs.append(df3["Curvature [1/m]"].iloc[idx])
+
+    df3["Gradient [permil]"] = grads
+    df3["Curvature [1/m]"] = curvs
+
     return df3
 
 
