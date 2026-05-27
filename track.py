@@ -105,7 +105,7 @@ def computeDiscretizationPoints(track, numIntervals, opts):
 
         raise ValueError("Wrong number of computed discretization intervals!")
 
-    if opts.withTrainLengthDependentTrackAttributes:
+    if "Gradient linear term [permil/m]" in df3.columns:
         # adapt constant track attribute terms to new shooting nodes
 
         positions = df3.index.to_numpy(dtype=float)

@@ -27,8 +27,6 @@ class OptionsCasadiSolver(Options):
 
         self.integrateLosses = False  # integrate losses or take mid-point rule
 
-        self.withTrainLengthDependentTrackAttributes = False
-
         self.chooseClosestTunnelCrossSection = True # if exact tunnel cross section is not specified in train tunnel resistances, choose the closest value
 
         super().__init__(paramsDict)
@@ -202,7 +200,6 @@ class casadiSolver():
                 curvLinearTerm = self.points.iloc[i]["Curvature linear term [1/m^2]"]
                 crossSection = self.points.iloc[i]['CrossSection [m^2]']
                 tunnelFactor = computeTunnelFactor(crossSection, train, opts)
-                print(tunnelFactor)
 
                 # acceleration constraints
                 g += [trainModel.accelerationFun(ca.vertcat(time[i], velSq[i], 0), ca.vcat(u), grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)]
