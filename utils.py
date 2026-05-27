@@ -578,6 +578,13 @@ def plotGradients(track, pos_adj, g_adj, g_linear):
     x = track.gradients.index.to_numpy(dtype=float)
     g = track.gradients["Gradient [permil]"].to_numpy(dtype=float)
 
+    x = np.append(x, track.length)
+    g = np.append(g, g[-1])
+
+    pos_adj = np.append(pos_adj, track.length)
+    g_adj = np.append(g_adj, g_adj[-1])
+    g_linear = np.append(g_linear, g_linear[-1])
+
     fig, ax = plt.subplots(figsize=(16, 8))
 
     ax.step(x/1000, g, where='post', label="piecewise constant gradients")

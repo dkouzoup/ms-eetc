@@ -105,34 +105,81 @@ def computeDiscretizationPoints(track, numIntervals, opts):
 
         raise ValueError("Wrong number of computed discretization intervals!")
 
+    adaptConstantTrackAttributesToNewShootingNodes(df3, numIntervals)
+
+    if opts.pwcLengthDependentTrackAttributes:
+
+        makePwcLengthDependentTrackAttibutes(df3)
+
+    return df3
+
+
+def adaptConstantTrackAttributesToNewShootingNodes(df3, numIntervals):
+
     if "Gradient linear term [permil/m]" in df3.columns:
-        # adapt constant track attribute terms to new shooting nodes
 
         positions = df3.index.to_numpy(dtype=float)
         grads = [df3["Gradient [permil]"].iloc[0]]
-        curvs = [df3["Curvature [1/m]"].iloc[0]]
 
-        for idx in range(1, numIntervals+1):
+        for idx in range(1, numIntervals + 1):
 
-            if np.isclose(df3["Gradient [permil]"].iloc[idx-1], df3["Gradient [permil]"].iloc[idx]):
-                grads.append(grads[-1] + (positions[idx] -  positions[idx - 1]) * df3["Gradient linear term [permil/m]"].iloc[idx - 1])
+            if np.isclose(df3["Gradient [permil]"].iloc[idx - 1], df3["Gradient [permil]"].iloc[idx]):
+
+                grads.append(grads[-1] + (positions[idx] - positions[idx - 1]) * df3["Gradient linear term [permil/m]"].iloc[idx - 1])
+
             else:
+
                 grads.append(df3["Gradient [permil]"].iloc[idx])
 
+        df3["Gradient [permil]"] = grads
+
+    else:
+
+        df3["Gradient linear term [permil/m]"] = np.zeros(len(df3))
+
+
+    if "Curvature linear term [1/m^2]" in df3.columns:
+
+        positions = df3.index.to_numpy(dtype=float)
+        curvs = [df3["Curvature [1/m]"].iloc[0]]
+
+        for idx in range(1, numIntervals + 1):
+
             if np.isclose(df3["Curvature [1/m]"].iloc[idx - 1], df3["Curvature [1/m]"].iloc[idx]):
+
                 curvs.append(curvs[-1] + (positions[idx] - positions[idx - 1]) * df3["Curvature linear term [1/m^2]"].iloc[idx - 1])
+
             else:
+
                 curvs.append(df3["Curvature [1/m]"].iloc[idx])
 
-        df3["Gradient [permil]"] = grads
         df3["Curvature [1/m]"] = curvs
 
     else:
 
-        df3["Gradient linear term [permil/m]"] =  np.zeros(len(df3))
-        df3["Curvature linear term [1/m^2]"] =  np.zeros(len(df3))
+        df3["Curvature linear term [1/m^2]"] = np.zeros(len(df3))
 
-    return df3
+
+def makePwcLengthDependentTrackAttibutes(df3):
+
+    positions = df3.index.to_numpy(dtype=float)
+
+    g_pwl = df3["Gradient [permil]"].to_numpy(dtype=float)
+    g_linear = df3["Gradient linear term [permil/m]"].to_numpy(dtype=float)
+
+    c_pwl = df3["Curvature [1/m]"].to_numpy(dtype=float)
+    c_linear = df3["Curvature linear term [1/m^2]"].to_numpy(dtype=float)
+
+    ds = positions[1:] - positions[:-1]
+
+    g_pwc = g_pwl[:-1] + 0.5 * g_linear[:-1] * ds
+    c_pwc = c_pwl[:-1] + 0.5 * c_linear[:-1] * ds
+
+    df3["Gradient [permil]"] = np.r_[g_pwc, g_pwc[-1]]
+    df3["Curvature [1/m]"] = np.r_[c_pwc, c_pwc[-1]]
+
+    df3["Gradient linear term [permil/m]"] = np.zeros(len(df3))
+    df3["Curvature linear term [1/m^2]"] = np.zeros(len(df3))
 
 
 class Track():
@@ -590,7 +637,7 @@ class Track():
 
         if len(pos) > 1:
 
-            pos_adj = np.sort(np.r_[pos, pos + trainLength])
+            pos_adj = np.sort(np.unique(np.r_[pos, pos + trainLength]))
 
             pos_adj = pos_adj[pos_adj < self.length]
 
@@ -607,7 +654,7 @@ class Track():
                 epsilon = 0.001
                 list_indices = []
 
-                for idx2 in range(len(pos)-1):
+                for idx2 in range(len(pos)):
 
                     if currentPosition - trainLength + epsilon < pos[idx2] < currentPosition + epsilon:
                         list_indices.append(idx2)
@@ -620,7 +667,7 @@ class Track():
             # plotGradients(self, np.asarray(pos_adj, dtype=float), np.asarray(g_adj, dtype=float), np.asarray(g_linear, dtype=float))
 
             self.gradients = pd.DataFrame(
-                {"Gradient [permil]": g_adj, "Gradient linear term [permil]": g_linear},
+                {"Gradient [permil]": g_adj, "Gradient linear term [permil/m]": g_linear},
                 index=pos_adj,
             )
 

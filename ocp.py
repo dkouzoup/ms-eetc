@@ -29,6 +29,8 @@ class OptionsCasadiSolver(Options):
 
         self.chooseClosestTunnelCrossSection = True # if exact tunnel cross section is not specified in train tunnel resistances, choose the closest value
 
+        self.pwcLengthDependentTrackAttributes = False
+
         super().__init__(paramsDict)
 
 

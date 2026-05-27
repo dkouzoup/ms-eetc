@@ -264,7 +264,7 @@ class TrainModel():
         gradient = ca.MX.sym('gradient')                        # [-]     -> values between [0,0.2]
         gradientLinearTerm = ca.MX.sym('gradientLinearTerm')    # [1/m]
         curvature = ca.MX.sym('curvature')                      # [1/m]   -> values between [0,0.004]
-        curvatureLinearTerm = ca.MX.sym('curvatureLinearTerm')            # [1/m^2]
+        curvatureLinearTerm = ca.MX.sym('curvatureLinearTerm')  # [1/m^2]
         tunnelFactor = ca.MX.sym('tunnelFactor')                # [1/m]
         ds = ca.MX.sym('ds')
 
@@ -272,10 +272,10 @@ class TrainModel():
 
         # ODE
 
-        rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared                # [N/kg]
-        gradientResistance = g*(1/rho)*(gradient+gradientLinearTerm*position)                                                  # [N/kg]
-        curvatureResistance = (1/rho)*(5.07 * (curvature+curvatureLinearTerm*position))                                                          # [N/kg]
-        tunnelResistance = tunnelFactor * velocitySquared                                           # [N/kg]
+        rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared # [N/kg]
+        gradientResistance = g*(1/rho)*(gradient+gradientLinearTerm*position) # [N/kg]
+        curvatureResistance = (1/rho)*(5.07 * (curvature+curvatureLinearTerm*position)) # [N/kg]
+        tunnelResistance = tunnelFactor * velocitySquared # [N/kg]
 
         acceleration = traction + (pnBrake if withPnBrake else 0) - rollingResistance - gradientResistance - curvatureResistance - tunnelResistance # [m/s^2]
 
@@ -378,7 +378,7 @@ class TrainIntegrator():
 
             eval = ca.vertcat(tApprox, zf[0, ns], zf[1, ns])
 
-            self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('ds')], [eval])
+            self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('dummy')], [eval])
 
 
     def solve(self, time, velocitySquared, ds, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
