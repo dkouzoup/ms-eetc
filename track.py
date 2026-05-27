@@ -302,7 +302,7 @@ class Track():
 
         if not self.crossSectionsOk():
 
-            raise ValueError("Issue with track cross sections!")
+            raise ValueError("Issue with tunnel cross sections!")
 
 
     def importGradientTuples(self, tuples, unit='permil'):
@@ -448,12 +448,12 @@ class Track():
             raise ValueError("Specified tunnel units not supported!")
 
         tuples = [(p, convertUnit(l, unitLength), convertUnit(c, unitCrossSection)) for p,l,c in tuples]
-        self.tunnels = importTuples(tuples, 'Position [m]', ['Length [m]', 'CrossSection [m^2]'])
+        self.crossSections = importTuples(tuples, 'Position [m]', ['Length [m]', 'CrossSection [m^2]'])
 
 
         # get end of tunnel positions and assign them a cross section of inf
-        positions = self.tunnels.index.astype(float)
-        tunnelLengths = self.tunnels["Length [m]"].astype(float)
+        positions = self.crossSections.index.astype(float)
+        tunnelLengths = self.crossSections["Length [m]"].astype(float)
 
         endOfTunnelPositions = positions + tunnelLengths
 
@@ -463,19 +463,16 @@ class Track():
             if not any(abs((p - e)) < 0.1 for p in positions)
         ]
 
-        openTrack_df = pd.DataFrame({"Length [m]": 0.0, "CrossSection [m^2]": float("inf")}, index=endOfTunnelPositions)
-        openTrack_df.index.name = self.tunnels.index.name
-        self.tunnels = pd.concat([self.tunnels, openTrack_df]).sort_index()
+        nonTunnelSections_df = pd.DataFrame({"Length [m]": 0.0, "CrossSection [m^2]": float("inf")}, index=endOfTunnelPositions)
+        nonTunnelSections_df.index.name = self.crossSections.index.name
+        self.crossSections = pd.concat([self.crossSections, nonTunnelSections_df]).sort_index()
 
         if positions[0] != 0.0:
             first_row = {"Position [m]": 0.0, "Length [m]": 0.0, "CrossSection [m^2]": float("inf")}
-            self.tunnels.loc[0] = first_row
-            self.tunnels = self.tunnels.sort_index()
+            self.crossSections.loc[0] = first_row
+            self.crossSections = self.crossSections.sort_index()
 
-        self.tunnels.drop(columns=["Length [m]"], inplace=True)
-
-        self.crossSections = self.tunnels
-        del self.tunnels
+        self.crossSections.drop(columns=["Length [m]"], inplace=True)
 
         checkDataFrame(self.crossSections, self.length)
 
@@ -630,88 +627,112 @@ class Track():
 
 
     def updateGradientsToTrainLength(self, trainLength):
+        """
+        Convert pointwise gradient changes into train-length-dependent piecewise linear gradients.
 
-        g = self.gradients["Gradient [permil]"].to_numpy(dtype=float)
-        pos = self.gradients.index.to_numpy(dtype=float)
-        slopes = np.r_[0,(g[1:]-g[:-1])/trainLength]
+        A gradient step at position s does not affect the whole train at once.
+        Instead, its effect is spread over one train length, from s to s + trainLength.
+        """
 
-        if len(pos) > 1:
+        gradientValues = self.gradients["Gradient [permil]"].to_numpy(dtype=float)
+        gradientPositions = self.gradients.index.to_numpy(dtype=float)
 
-            pos_adj = np.sort(np.unique(np.r_[pos, pos + trainLength]))
+        if len(gradientPositions) <= 1:
 
-            pos_adj = pos_adj[pos_adj < self.length]
+            return
 
-            g_adj = [g[0]]
-            g_linear = [0]
+        # Each original gradient jump is spread linearly over one train length assuming uniform mass.
+        # The first point has no previous gradient, so its slope contribution is zero.
+        gradientJumpSlopes = np.r_[0.0, (gradientValues[1:] - gradientValues[:-1]) / trainLength]
 
-            for idx in range(1,len(pos_adj)):
+        # New breakpoints occur both when the front of the train reaches a gradient and when the rear of the train has passed it.
+        adjustedPositions = np.sort(np.unique(np.r_[gradientPositions, gradientPositions + trainLength]))
+        adjustedPositions = adjustedPositions[adjustedPositions < self.length]
 
-                currentPosition = pos_adj[idx]
-                previousPosition = pos_adj[idx - 1]
+        adjustedGradients = [gradientValues[0]]
+        gradientLinearTerms = [0.0]
 
-                currentGradient = g_adj[idx-1] + (currentPosition-previousPosition)*g_linear[idx-1]
+        epsilon = 1e-3
 
-                epsilon = 0.001
-                list_indices = []
+        for idx in range(1,len(adjustedPositions)):
 
-                for idx2 in range(len(pos)):
+            currentPosition = adjustedPositions[idx]
+            previousPosition = adjustedPositions[idx - 1]
 
-                    if currentPosition - trainLength + epsilon < pos[idx2] < currentPosition + epsilon:
-                        list_indices.append(idx2)
+            intervalLength = currentPosition - previousPosition
 
-                currentLinearTerm = sum(slopes[list_indices])
+            # Continue the previous linear gradient to the current position.
+            currentGradient = adjustedGradients[-1] + intervalLength * gradientLinearTerms[-1]
 
-                g_adj.append(currentGradient)
-                g_linear.append(currentLinearTerm)
-
-            # plotGradients(self, np.asarray(pos_adj, dtype=float), np.asarray(g_adj, dtype=float), np.asarray(g_linear, dtype=float))
-
-            self.gradients = pd.DataFrame(
-                {"Gradient [permil]": g_adj, "Gradient linear term [permil/m]": g_linear},
-                index=pos_adj,
+            # Active gradient jumps are those currently within one train length behind the train front.
+            activeJumpMask = (
+                    (currentPosition - trainLength + epsilon < gradientPositions)
+                    & (gradientPositions < currentPosition + epsilon)
             )
 
+            currentLinearTerm = np.sum(gradientJumpSlopes[activeJumpMask])
+
+            adjustedGradients.append(currentGradient)
+            gradientLinearTerms.append(currentLinearTerm)
+
+        # plotGradients(self, np.asarray(pos_adj, dtype=float), np.asarray(g_adj, dtype=float), np.asarray(g_linear, dtype=float))
+
+        self.gradients = pd.DataFrame({"Gradient [permil]": adjustedGradients, "Gradient linear term [permil/m]": gradientLinearTerms}, index=adjustedPositions)
+
+
     def updateCurvaturesToTrainLength(self, trainLength):
+        """
+        Convert pointwise curvature changes into train-length-dependent piecewise linear curvatures.
 
-        c = self.curvatures["Curvature [1/m]"].to_numpy(dtype=float)
-        pos = self.curvatures.index.to_numpy(dtype=float)
-        slopes = np.r_[0, (c[1:] - c[:-1]) / trainLength]
+        A curvature step at position s does not affect the whole train at once.
+        Instead, its effect is spread over one train length, from s to s + trainLength.
+        """
 
-        if len(pos) > 1:
+        curvatureValues = self.curvatures["Curvature [1/m]"].to_numpy(dtype=float)
+        curvaturePositions = self.curvatures.index.to_numpy(dtype=float)
 
-            pos_adj = np.sort(np.r_[pos, pos + trainLength])
+        if len(curvaturePositions) <= 1:
 
-            pos_adj = pos_adj[pos_adj < self.length]
+            return
 
-            c_adj = [c[0]]
-            c_linear = [0]
+        # Each original curvature jump is spread linearly over one train length assuming uniform mass.
+        # The first point has no previous curvature, so its slope contribution is zero.
+        curvatureJumpSlopes = np.r_[0.0, (curvatureValues[1:] - curvatureValues[:-1]) / trainLength]
 
-            for idx in range(1,len(pos_adj)):
+        # New breakpoints occur both when the front of the train reaches a curvature
+        # change and when the rear of the train has passed it.
+        adjustedPositions = np.sort(np.unique(np.r_[curvaturePositions, curvaturePositions + trainLength]))
+        adjustedPositions = adjustedPositions[adjustedPositions < self.length]
 
-                currentPosition = pos_adj[idx]
-                previousPosition = pos_adj[idx - 1]
+        adjustedCurvatures = [curvatureValues[0]]
+        curvatureLinearTerms = [0.0]
 
-                currentCurvature = c_adj[idx-1] + (currentPosition-previousPosition)*c_linear[idx-1]
+        epsilon = 1e-3
 
-                epsilon = 0.001
-                list_indices = []
+        for idx in range(1, len(adjustedPositions)):
 
-                for idx2 in range(len(pos)):
+            currentPosition = adjustedPositions[idx]
+            previousPosition = adjustedPositions[idx - 1]
 
-                    if currentPosition - trainLength + epsilon < pos[idx2] < currentPosition + epsilon:
-                        list_indices.append(idx2)
+            intervalLength = currentPosition - previousPosition
 
-                currentLinearTerm = sum(slopes[list_indices])
+            # Continue the previous linear curvature to the current position.
+            currentCurvature = adjustedCurvatures[-1] + intervalLength * curvatureLinearTerms[-1]
 
-                c_adj.append(currentCurvature)
-                c_linear.append(currentLinearTerm)
+            # Active curvature jumps are those currently within one train length behind the train front.
+            activeJumpMask = (
+                    (currentPosition - trainLength + epsilon < curvaturePositions)
+                    & (curvaturePositions < currentPosition + epsilon)
+            )
+
+            currentLinearTerm = np.sum(curvatureJumpSlopes[activeJumpMask])
+
+            adjustedCurvatures.append(currentCurvature)
+            curvatureLinearTerms.append(currentLinearTerm)
 
             # plotCurvatures(self, np.asarray(pos_adj, dtype=float), np.asarray(c_adj, dtype=float), np.asarray(c_linear, dtype=float))
 
-            self.curvatures = pd.DataFrame(
-                {"Curvature [1/m]": c_adj, "Curvature linear term [1/m^2]": c_linear},
-                index=pos_adj,
-            )
+            self.curvatures = pd.DataFrame({"Curvature [1/m]": adjustedCurvatures, "Curvature linear term [1/m^2]": curvatureLinearTerms}, index=adjustedPositions)
 
 
 if __name__ == '__main__':

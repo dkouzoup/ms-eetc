@@ -246,38 +246,38 @@ class TrainModel():
 
         # states
 
-        time = ca.MX.sym('time')                            # [s]
-        velocitySquared = ca.MX.sym('velocitySquared')      # [m^2/s^2]
-        position = ca.MX.sym('position')                    # [m]
+        time = ca.MX.sym('time')  # [s]
+        velocitySquared = ca.MX.sym('velocitySquared')  # [m^2/s^2]
+        position = ca.MX.sym('position')  # [m]
 
         x = ca.vertcat(time, velocitySquared, position)
 
         # controls
 
-        traction = ca.MX.sym('traction')                    # [N/kg]
-        pnBrake = ca.MX.sym('pnBrake')                      # [N/kg]
+        traction = ca.MX.sym('traction')  # [N/kg]
+        pnBrake = ca.MX.sym('pnBrake') # [N/kg]
 
         u = ca.vertcat(traction, pnBrake if withPnBrake else [])
 
         # parameters
 
-        gradient = ca.MX.sym('gradient')                        # [-]     -> values between [0,0.2]
-        gradientLinearTerm = ca.MX.sym('gradientLinearTerm')    # [1/m]
-        curvature = ca.MX.sym('curvature')                      # [1/m]   -> values between [0,0.004]
+        gradient = ca.MX.sym('gradient')  # [-]
+        gradientLinearTerm = ca.MX.sym('gradientLinearTerm')  # [1/m]
+        curvature = ca.MX.sym('curvature')  # [1/m]
         curvatureLinearTerm = ca.MX.sym('curvatureLinearTerm')  # [1/m^2]
-        tunnelFactor = ca.MX.sym('tunnelFactor')                # [1/m]
+        tunnelFactor = ca.MX.sym('tunnelFactor')  # [1/m]
         ds = ca.MX.sym('ds')
 
         p = ca.vertcat(gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor, ds)
 
         # ODE
 
-        rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared # [N/kg]
-        gradientResistance = g*(1/rho)*(gradient+gradientLinearTerm*position) # [N/kg]
-        curvatureResistance = (1/rho)*(5.07 * (curvature+curvatureLinearTerm*position)) # [N/kg]
-        tunnelResistance = tunnelFactor * velocitySquared # [N/kg]
+        rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared  # [N/kg]
+        gradientResistance = g*(1/rho)*(gradient+gradientLinearTerm*position)  # [N/kg]
+        curvatureResistance = (1/rho)*(5.07 * (curvature+curvatureLinearTerm*position))  # [N/kg]
+        tunnelResistance = tunnelFactor * velocitySquared  # [N/kg]
 
-        acceleration = traction + (pnBrake if withPnBrake else 0) - rollingResistance - gradientResistance - curvatureResistance - tunnelResistance # [m/s^2]
+        acceleration = traction + (pnBrake if withPnBrake else 0) - rollingResistance - gradientResistance - curvatureResistance - tunnelResistance  # [m/s^2]
 
         timeODE = 1/ca.sqrt(velocitySquared)
         velocityODE = 2*acceleration
