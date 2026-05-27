@@ -730,9 +730,9 @@ class Track():
             adjustedCurvatures.append(currentCurvature)
             curvatureLinearTerms.append(currentLinearTerm)
 
-            # plotCurvatures(self, np.asarray(pos_adj, dtype=float), np.asarray(c_adj, dtype=float), np.asarray(c_linear, dtype=float))
+        # plotCurvatures(self, np.asarray(pos_adj, dtype=float), np.asarray(c_adj, dtype=float), np.asarray(c_linear, dtype=float))
 
-            self.curvatures = pd.DataFrame({"Curvature [1/m]": adjustedCurvatures, "Curvature linear term [1/m^2]": curvatureLinearTerms}, index=adjustedPositions)
+        self.curvatures = pd.DataFrame({"Curvature [1/m]": adjustedCurvatures, "Curvature linear term [1/m^2]": curvatureLinearTerms}, index=adjustedPositions)
 
 
 if __name__ == '__main__':

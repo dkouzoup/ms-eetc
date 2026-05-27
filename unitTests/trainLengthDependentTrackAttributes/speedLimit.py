@@ -22,7 +22,7 @@ class TestSpeedLimit(unittest.TestCase):
 
         train = Train(config={'id': 'Flirt_Tpf'}, pathJSON='trains')
 
-        track = Track(config={'id': 'test_speed_increase'}, pathJSON='tracks')
+        track = Track(config={'id': 'test_one_speed_increase'}, pathJSON='tracks')
         track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
 
         opts = {'numIntervals': 300, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
