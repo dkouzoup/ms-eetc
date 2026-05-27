@@ -7,31 +7,27 @@ from track import Track, computeAltitude
 from train import Train
 
 
-class TestGradient(unittest.TestCase):
+class TestCurvature(unittest.TestCase):
 
-    def testLinearGradient(self):
+    def testLinearCurvature(self):
         '''
-        Track with 20 permil increase from 1000 m to 2000 m and 20 permil
-        decrease from 3000 m to 4000 m.
+        Track with right turn from 1000 m to 2000 m and a left turn from 3000 m to 4000 m.
 
         Energy consumption should be roughly equal if computed using piecewise
-        linear gradients or equivalent piecewise constant gradients.
-
-        Altitude should be 0 m at the end.
+        linear curvatures or equivalent piecewise constant curvatures.
         '''
 
         startPosition = 0 # [m]
         endPosition = 5000 # [m]
         duration = 5000/(60/3.6) # [s]
 
-        altitudeTolerance = 1e-4
         energyRelativeTolerance = 0.004
         numIntervals = 100
 
         train = Train(config={'id': 'Flirt_Tpf'}, pathJSON='trains')
         train.length = 600
 
-        track = Track(config={'id': 'test_one_hill'}, pathJSON='tracks')
+        track = Track(config={'id': 'test_two_radii'}, pathJSON='tracks')
         track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
         track.updateTrainLengthDependentValues(train)
 
@@ -49,31 +45,18 @@ class TestGradient(unittest.TestCase):
 
         relativeEnergyDifference = (abs(energyConsumptionWithLinearTerms - energyConsumptionWithPwcTerms) / energyConsumptionWithLinearTerms)
 
-        df_grads_2 = df2.set_index("Position [m]")[["Gradient [permil]"]]
-        df_alt_2 = computeAltitude(df_grads_2, track.length)
-        finalAltitude = df_alt_2.iloc[-1]["Altitude [m]"]
-
         self.assertLess(
             relativeEnergyDifference,
             energyRelativeTolerance,
             msg=(
                 "Energy consumption differs too much between piecewise linear and "
-                f"piecewise constant gradients. Relative difference: "
+                f"piecewise constant curvatures. Relative difference: "
                 f"{relativeEnergyDifference:.6f}, tolerance: {energyRelativeTolerance:.6f}. "
                 f"PWL cost: {energyConsumptionWithLinearTerms:.6f}, "
                 f"PWC cost: {energyConsumptionWithPwcTerms:.6f}."
             )
         )
 
-        self.assertLess(
-            abs(finalAltitude),
-            altitudeTolerance,
-            msg=(
-                "Final altitude should be close to 0 m. "
-                f"Final altitude: {finalAltitude:.8f} m, "
-                f"tolerance: {altitudeTolerance:.8f} m."
-            )
-        )
 
         plotDebug = True
 
@@ -81,12 +64,11 @@ class TestGradient(unittest.TestCase):
 
             fig, ax = plt.subplots(figsize=(16, 8))
 
-            df_grads_1 = df1.set_index("Position [m]")[["Gradient [permil]"]]
-            ax.plot(df_grads_1.index.values / 1000, df_grads_1["Gradient [permil]"],label="pwl gradients")
-            ax.step(df_grads_2.index.values / 1000, df_grads_2["Gradient [permil]"], '--', where='post', label="pwc gradients")
-            ax.set_title("Gradients")
+            ax.plot(df1["Position [m]"] / 1000, df1["Curvature [1/m]"], label="pwl curvatures")
+            ax.step(df2["Position [m]"] / 1000, df2["Curvature [1/m]"], "--", where="post", label="pwc curvatures")
+            ax.set_title("Curvatures")
             ax.set_xlabel("Position [km]")
-            ax.set_ylabel("Gradient [‰]")
+            ax.set_ylabel("Curvature [1/m]")
             ax.grid(True, which="both", linestyle="--", alpha=0.5)
             ax.legend(loc="upper right")
             ax.set_xlim(0, track.length / 1000)
@@ -114,7 +96,7 @@ class TestGradient(unittest.TestCase):
         train = Train(config={'id': 'Flirt_Tpf'}, pathJSON='trains')
         train.length = 600
 
-        track = Track(config={'id': 'test_one_hill'}, pathJSON='tracks')
+        track = Track(config={'id': 'test_two_radii'}, pathJSON='tracks')
         track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
         track.updateTrainLengthDependentValues(train)
 

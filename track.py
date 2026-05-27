@@ -696,7 +696,7 @@ class Track():
                 epsilon = 0.001
                 list_indices = []
 
-                for idx2 in range(len(pos)-1):
+                for idx2 in range(len(pos)):
 
                     if currentPosition - trainLength + epsilon < pos[idx2] < currentPosition + epsilon:
                         list_indices.append(idx2)
