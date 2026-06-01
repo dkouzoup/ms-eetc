@@ -372,8 +372,12 @@ class TrainIntegrator():
 
             epsVelSq = 0.0001
             for idx in range(ns):
-                vCurr = ca.sqrt(ca.fmax(zf[0, idx], epsVelSq))
-                vNext = ca.sqrt(ca.fmax(zf[0, idx + 1], epsVelSq))
+                # vCurr = ca.sqrt(ca.fmax(zf[0, idx], epsVelSq))
+                # vNext = ca.sqrt(ca.fmax(zf[0, idx + 1], epsVelSq))
+
+                vCurr = ca.sqrt(zf[0, idx])
+                vNext = ca.sqrt(zf[0, idx + 1])
+
                 tApprox += 2*model.parameters[-1]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
 
             eval = ca.vertcat(tApprox, zf[0, ns], zf[1, ns])

@@ -209,9 +209,16 @@ class casadiSolver():
                 ubg += [accMax]
 
                 # coupling constraints
-                out = trainIntegrator.solve(time=time[i], velocitySquared=velSq[i], ds=self.steps[i],
-                    traction=Fel[i], pnBrake=Fpb[i], gradient=grad, gradientLinearTerm=curvLinearTerm, curvature=curv,
-                                            curvatureLinearTerm=curvLinearTerm, tunnelFactor=tunnelFactor)
+                out = trainIntegrator.solve(time=time[i],
+                                            velocitySquared=velSq[i],
+                                            ds=self.steps[i],
+                                            traction=Fel[i],
+                                            pnBrake=Fpb[i],
+                                            gradient=grad,
+                                            gradientLinearTerm=gradLinearTerm,
+                                            curvature=curv,
+                                            curvatureLinearTerm=curvLinearTerm,
+                                            tunnelFactor=tunnelFactor)
 
                 xNxt1 = ca.vertcat(time[i+1], velSq[i+1])
                 xNxt2 = ca.vertcat(out['time'], out['velSquared'])

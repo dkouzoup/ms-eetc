@@ -37,8 +37,8 @@
         "values": [
             [
                 0.0,
-                Infinity,
-                Infinity
+                "infinity",
+                "infinity"
             ],
             [
                 1000.0,
@@ -47,8 +47,8 @@
             ],
             [
                 2000.0,
-                Infinity,
-                Infinity
+                "infinity",
+                "infinity"
             ],
             [
                 3000.0,
@@ -57,8 +57,8 @@
             ],
             [
                 4000.0,
-                Infinity,
-                Infinity
+                "infinity",
+                "infinity"
             ]
         ]
     }

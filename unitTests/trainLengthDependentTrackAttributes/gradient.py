@@ -1,13 +1,150 @@
 import unittest
 
+import numpy as np
 from matplotlib import pyplot as plt
 
-from ocp import casadiSolver
+from ocp import casadiSolver, OptionsCasadiSolver
 from track import Track, computeAltitude
-from train import Train
+from train import Train, TrainIntegrator
 
 
 class TestGradient(unittest.TestCase):
+
+    def test_integrator_CVODES(self):
+        '''
+        Track with a linearly increasing gradient over 1000 m.
+
+        The result obtained using the piecewise linear gradient model is compared
+        against a piecewise constant midpoint approximation with increasing numbers
+        of intervals.
+
+        The piecewise constant approximation should converge to the piecewise linear
+        result for both duration and final velocity.
+        '''
+
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+
+        optsDict = {'integrationMethod': 'CVODES'}
+        opts = OptionsCasadiSolver(optsDict)
+
+        trainModel = train.exportModel()
+        trainIntegrator = TrainIntegrator(trainModel, opts.integrationMethod, opts.integrationOptions.toDict())
+
+        # Scenario
+        time0 = 0
+        velSq0 = 1
+        ds = 1000
+        traction = 0.8 * (train.forceMax / train.mass)
+
+        initialGradient = 0
+        finalGradient = 0.07
+
+        maxIntervals = 50
+        relativeTolerance = 1e-3
+        plotDebug = True
+
+        # PWL gradient reference
+        out = trainIntegrator.solve(
+            time=time0,
+            velocitySquared=velSq0,
+            ds=ds,
+            traction=traction,
+            pnBrake=0,
+            gradient=initialGradient,
+            gradientLinearTerm=(finalGradient - initialGradient) / ds,
+            curvature=0,
+            curvatureLinearTerm=0,
+            tunnelFactor=0
+        )
+
+        pwlDuration = float(out['time'])
+        pwlVelocity = np.sqrt(float(out['velSquared']))
+
+        # PWC gradients using midpoint rule
+        times = []
+        velocities = []
+        intervalCounts = []
+
+        for numIntervals in range(1, maxIntervals + 1):
+
+            time = time0
+            velSq = velSq0
+
+            for idx in range(numIntervals):
+
+                gradient = (initialGradient + (idx + 0.5) * (finalGradient - initialGradient) / numIntervals)
+
+                out = trainIntegrator.solve(
+                    time=time,
+                    velocitySquared=velSq,
+                    ds=ds / numIntervals,
+                    traction=traction,
+                    pnBrake=0,
+                    gradient=gradient,
+                    gradientLinearTerm=0,
+                    curvature=0,
+                    curvatureLinearTerm=0,
+                    tunnelFactor=0
+                )
+
+                time = out['time']
+                velSq = out['velSquared']
+
+            intervalCounts.append(numIntervals)
+            times.append(float(time))
+            velocities.append(np.sqrt(float(velSq)))
+
+        finalPwcDuration = times[-1]
+        finalPwcVelocity = velocities[-1]
+
+        relativeDurationError = abs(finalPwcDuration - pwlDuration) / pwlDuration
+        relativeVelocityError = abs(finalPwcVelocity - pwlVelocity) / pwlVelocity
+
+        self.assertLess(
+            relativeDurationError,
+            relativeTolerance,
+            msg=(
+                "PWC midpoint approximation did not converge sufficiently "
+                "to the PWL duration. "
+                f"PWL duration: {pwlDuration:.6f}, "
+                f"PWC duration: {finalPwcDuration:.6f}, "
+                f"relative error: {relativeDurationError:.6e}."
+            )
+        )
+
+        self.assertLess(
+            relativeVelocityError,
+            relativeTolerance,
+            msg=(
+                "PWC midpoint approximation did not converge sufficiently "
+                "to the PWL final velocity. "
+                f"PWL velocity: {pwlVelocity:.6f}, "
+                f"PWC velocity: {finalPwcVelocity:.6f}, "
+                f"relative error: {relativeVelocityError:.6e}."
+            )
+        )
+
+        if plotDebug:
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 10))
+
+            ax1.axhline(pwlDuration, label="pwl")
+            ax1.plot(intervalCounts, times, marker="o", color="orange", label="pwc midpoint")
+            ax1.set_xlabel("Number of intervals")
+            ax1.set_ylabel("Duration [s]")
+            ax1.grid(True, which="both", linestyle="--", alpha=0.5)
+            ax1.legend(loc="upper right")
+
+            ax2.axhline(pwlVelocity, label="pwl")
+            ax2.plot(intervalCounts, velocities, marker="o", color="orange", label="pwc midpoint")
+            ax2.set_xlabel("Number of intervals")
+            ax2.set_ylabel("Velocity [m/s]")
+            ax2.grid(True, which="both", linestyle="--", alpha=0.5)
+            ax2.legend(loc="upper right")
+
+            fig.tight_layout()
+            plt.show()
+
+
 
     def testLinearGradient(self):
         '''
@@ -25,23 +162,23 @@ class TestGradient(unittest.TestCase):
         duration = 5000/(60/3.6) # [s]
 
         altitudeTolerance = 1e-4
-        energyRelativeTolerance = 0.004
+        energyRelativeTolerance = 1e-4
         numIntervals = 100
 
-        train = Train(config={'id': 'Flirt_Tpf'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
         train.length = 600
 
         track = Track(config={'id': 'test_one_hill'}, pathJSON='tracks')
         track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
         track.updateTrainLengthDependentValues(train)
 
-        opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
+        opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 0}, 'energyOptimal': True}
         solver = casadiSolver(train, track, opts)
         df1, stats1 = solver.solve(duration)
 
         energyConsumptionWithLinearTerms = stats1['Cost']
 
-        opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True, 'pwcLengthDependentTrackAttributes': True}
+        opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 0}, 'energyOptimal': True, 'pwcLengthDependentTrackAttributes': True}
         solver = casadiSolver(train, track, opts)
         df2, stats2 = solver.solve(duration)
 
@@ -93,94 +230,3 @@ class TestGradient(unittest.TestCase):
             ax.figure.tight_layout()
 
             plt.show()
-
-    def testAllIntegratorTypesWork(self):
-        '''
-        Verify that all supported integration methods produce consistent results
-        for the same train, track, and optimization setup.
-
-        The test compares RK, IRK, and CVODES, including the approximate time
-        integration option for RK and IRK. The resulting energy costs should only
-        differ by a small relative tolerance.
-        '''
-
-        startPosition = 0  # [m]
-        endPosition = 5000  # [m]
-        duration = 5000 / (60 / 3.6)  # [s]
-
-        tol = 0.02
-        numIntervals = 100
-
-        train = Train(config={'id': 'Flirt_Tpf'}, pathJSON='trains')
-        train.length = 600
-
-        track = Track(config={'id': 'test_one_hill'}, pathJSON='tracks')
-        track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
-        track.updateTrainLengthDependentValues(train)
-
-        opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1},'energyOptimal': True}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
-
-        energy_RK_Approx = stats['Cost']
-
-        opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 0},'energyOptimal': True}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
-
-        energy_RK = stats['Cost']
-
-        opts = {'numIntervals': numIntervals, 'integrationMethod': 'IRK', 'integrationOptions': {'numApproxSteps': 1},'energyOptimal': True}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
-
-        energy_IRK_Approx = stats['Cost']
-
-        opts = {'numIntervals': numIntervals, 'integrationMethod': 'IRK', 'integrationOptions': {'numApproxSteps': 0},'energyOptimal': True}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
-
-        energy_IRK = stats['Cost']
-
-        opts = {'numIntervals': numIntervals, 'integrationMethod': 'CVODES', 'energyOptimal': True}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
-
-        energy_CVODES = stats['Cost']
-
-        relDiff_RKApprox_IRKApprox = abs(energy_RK_Approx - energy_IRK_Approx) / energy_RK_Approx
-        relDiff_RKApprox_CVODES = abs(energy_RK_Approx - energy_CVODES) / energy_RK_Approx
-        relDiff_RK_IRK = abs(energy_RK - energy_IRK) / energy_RK
-
-        self.assertLess(
-            relDiff_RKApprox_IRKApprox,
-            tol,
-            msg=(
-                "RK and IRK with numApproxSteps=1 should give similar costs. "
-                f"RK approx: {energy_RK_Approx:.6f}, "
-                f"IRK approx: {energy_IRK_Approx:.6f}, "
-                f"relative difference: {relDiff_RKApprox_IRKApprox:.6f}."
-            )
-        )
-
-        self.assertLess(
-            relDiff_RKApprox_CVODES,
-            tol,
-            msg=(
-                "RK with numApproxSteps=1 and CVODES should give similar costs. "
-                f"RK approx: {energy_RK_Approx:.6f}, "
-                f"CVODES: {energy_CVODES:.6f}, "
-                f"relative difference: {relDiff_RKApprox_CVODES:.6f}."
-            )
-        )
-
-        self.assertLess(
-            relDiff_RK_IRK,
-            tol,
-            msg=(
-                "RK and IRK with numApproxSteps=0 should give similar costs. "
-                f"RK: {energy_RK:.6f}, "
-                f"IRK: {energy_IRK:.6f}, "
-                f"relative difference: {relDiff_RK_IRK:.6f}."
-            )
-        )

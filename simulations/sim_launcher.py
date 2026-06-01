@@ -13,11 +13,11 @@ if __name__ == '__main__':
     train = Train(config={'id':'Flirt_Tpf'}, pathJSON='../trains')
 
     track = Track(config={'id':'CH_ZH_LU'}, pathJSON='../tracks')
-    # track = Track(config={'id':'CH_StGallen_Wil'}, pathJSON='../tracks')
+    track = Track(config={'id':'CH_StGallen_Wil'}, pathJSON='../tracks')
     track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
     track.updateTrainLengthDependentValues(train)
 
-    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':0}, 'energyOptimal':True}
+    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
 
     solver = casadiSolver(train, track, opts)
 
