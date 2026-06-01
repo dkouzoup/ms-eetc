@@ -3,11 +3,11 @@ import json
 import numpy as np
 import casadi as ca
 
-from .utils import Options, checkTTOBenchVersion, convertUnit, splitLosses
+from mseetc.utils import Options, checkTTOBenchVersion, convertUnit, splitLosses
 
 class Train():
 
-    def __init__(self, config, pathJSON='trains') -> None:
+    def __init__(self, config, pathJSON='../trains') -> None:
         """
         Constructor of Train objects.
         """

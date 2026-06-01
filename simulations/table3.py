@@ -5,7 +5,7 @@ import pandas as pd
 from mseetc.utils import postProcessDataFrame
 from mseetc.train import Train
 from mseetc.track import Track
-from mseetc.ms.ocp import casadiSolver
+from mseetc.ocp import casadiSolver
 from mseetc.efficiency import totalLossesFunction
 
 

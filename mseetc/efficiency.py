@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import casadi as ca
 
-from .data import dataLosses
+from mseetc.data import dataLosses
 
 def forceToLoad(force, velocity, forceMax, powerMax):
     "Convert force [N] to load [%] (force must be positive)."

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .utils import checkTTOBenchVersion, convertUnit
+from mseetc.utils import checkTTOBenchVersion, convertUnit
 
 def importTuples(tuples, xLabel, yLabels):
     """
@@ -111,7 +111,7 @@ class Track():
 
     CURVATURE_THRESHOLD = 1/150 # absolute value of maximum allowed cruvature [1/m]
 
-    def __init__(self, config, pathJSON='tracks'):
+    def __init__(self, config, pathJSON='../tracks'):
         """
         Constructor of Track objects.
         """

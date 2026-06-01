@@ -2,7 +2,7 @@ import json
 
 import matplotlib.pyplot as plt
 
-from mseetc.ms.ocp import casadiSolver
+from mseetc.ocp import casadiSolver
 from mseetc.train import Train
 from mseetc.track import Track
 from mseetc.utils import latexify, show, saveFig, postProcessDataFrame
