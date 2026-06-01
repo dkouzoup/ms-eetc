@@ -1,4 +1,19 @@
+from efficiency import totalLossesFunction
 from ocp import casadiSolver
+
+def get_power_loss_function(train, mode="perfect",* ,auxiliaries: float = 27_000, eta_gear: float = 0.96):
+
+    if mode == "perfect":
+        return lambda f, v: 0
+
+    elif mode == "static":
+        return lambda f, v: (f>0)*f*v*(1-train.etaTraction)/train.etaTraction - (f<0)*f*v*(1-train.etaRgBrake)
+
+    elif mode == "dynamic":
+        return totalLossesFunction(train, auxiliaries=auxiliaries, etaGear=eta_gear)
+
+    else:
+        raise ValueError("mode must be one of: 'perfect', 'static', 'dynamic'")
 
 if __name__ == '__main__':
 
@@ -11,6 +26,9 @@ if __name__ == '__main__':
     duration = 60*20        # [s]
 
     train = Train(config={'id':'Flirt_Tpf'}, pathJSON='../trains')
+    train.forceMinPn = 0
+    train.withPnBrake = False
+    train.powerLosses = get_power_loss_function(train, "static")
 
     track = Track(config={'id':'CH_ZH_LU'}, pathJSON='../tracks')
     track = Track(config={'id':'CH_StGallen_Wil'}, pathJSON='../tracks')

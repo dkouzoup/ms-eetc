@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from ocp import casadiSolver
+from simulations.sim_launcher import get_power_loss_function
 from track import Track
 from train import Train
 
@@ -75,11 +76,14 @@ if __name__ == '__main__':
     endPosition = 23000         # [m]
     duration = 23000/(80/3.6)   # [s]
 
-    train = Train(config={'id': 'Flirt_Tpf'}, pathJSON='../../trains')
-    opts = {'numIntervals': 1000, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 0}, 'energyOptimal': True}
+    train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='../../trains')
+    train.forceMinPn = 0
+    train.withPnBrake = False
+    train.powerLosses = get_power_loss_function(train, "static")
+    opts = {'numIntervals': 1000, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 2}, 'energyOptimal': True}
 
     SBB_track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
-    SBB_track.updateTrainLengthDependentValues(train)
+    # SBB_track.updateTrainLengthDependentValues(train)
     solver = casadiSolver(train, SBB_track, opts)
     dfSBB, statsSBB = solver.solve(duration)
 
