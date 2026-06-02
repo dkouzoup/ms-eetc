@@ -145,6 +145,160 @@ class TestGradient(unittest.TestCase):
             plt.show()
 
 
+    def test_integrator_RK(self):
+        '''
+        Track with a linearly increasing gradient over 1000 m.
+
+        The result obtained using the piecewise linear gradient model is compared
+        against a piecewise constant midpoint approximation with increasing numbers
+        of intervals.
+
+        The piecewise constant approximation should converge to the piecewise linear
+        result for both duration and final velocity.
+        '''
+
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+
+        optsDict = {'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':0, 'numSteps': 1}}
+        opts = OptionsCasadiSolver(optsDict)
+
+        trainModel = train.exportModel()
+        trainIntegrator = TrainIntegrator(trainModel, opts.integrationMethod, opts.integrationOptions.toDict())
+
+        # Scenario
+        time0 = 0
+        velSq0 = 1
+        ds = 1000
+        traction = 0.8 * (train.forceMax / train.mass)
+
+        initialGradient = 0
+        finalGradient = 0.07
+
+        maxIntervals = 50
+        relativeTolerance = 1e-3
+        plotDebug = True
+
+        # PWL gradient reference
+        pwlTimes = []
+        pwlVelocities = []
+        pwlIntervalCounts = []
+
+        for numStep in range(1, maxIntervals + 1):
+
+            optsDict = {'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1, 'numSteps': numStep}}
+            opts = OptionsCasadiSolver(optsDict)
+            pwlTrainIntegrator = TrainIntegrator(trainModel, opts.integrationMethod, opts.integrationOptions.toDict())
+
+            out = pwlTrainIntegrator.solve(
+                time=time0,
+                velocitySquared=velSq0,
+                ds=ds,
+                traction=traction,
+                pnBrake=0,
+                gradient=initialGradient,
+                gradientLinearTerm=(finalGradient - initialGradient) / ds,
+                curvature=0,
+                curvatureLinearTerm=0,
+                tunnelFactor=0
+            )
+
+            pwlTimes.append(float(out['time']))
+            pwlVelocities.append(np.sqrt(float(out['velSquared'])))
+            pwlIntervalCounts.append(numStep)
+
+        finalPwlDuration = pwlTimes[-1]
+        finalPwlVelocity = pwlVelocities[-1]
+
+        # PWC gradients using midpoint rule
+        times = []
+        velocities = []
+        intervalCounts = []
+
+        for numIntervals in range(1, maxIntervals + 1):
+
+            time = time0
+            velSq = velSq0
+
+            for idx in range(numIntervals):
+
+                gradient = (initialGradient + (idx + 0.5) * (finalGradient - initialGradient) / numIntervals)
+
+                out = trainIntegrator.solve(
+                    time=time,
+                    velocitySquared=velSq,
+                    ds=ds / numIntervals,
+                    traction=traction,
+                    pnBrake=0,
+                    gradient=gradient,
+                    gradientLinearTerm=0,
+                    curvature=0,
+                    curvatureLinearTerm=0,
+                    tunnelFactor=0
+                )
+
+                time = out['time']
+                velSq = out['velSquared']
+
+            intervalCounts.append(numIntervals)
+            times.append(float(time))
+            velocities.append(np.sqrt(float(velSq)))
+
+        finalPwcDuration = times[-1]
+        finalPwcVelocity = velocities[-1]
+
+        relativeDurationError = abs(finalPwcDuration - finalPwlDuration) / finalPwlDuration
+        relativeVelocityError = abs(finalPwcVelocity - finalPwlVelocity) / finalPwlVelocity
+
+        self.assertLess(
+            relativeDurationError,
+            relativeTolerance,
+            msg=(
+                "PWC midpoint approximation did not converge sufficiently "
+                "to the PWL duration. "
+                f"PWL duration: {finalPwlDuration:.6f}, "
+                f"PWC duration: {finalPwcDuration:.6f}, "
+                f"relative error: {relativeDurationError:.6e}."
+            )
+        )
+
+        self.assertLess(
+            relativeVelocityError,
+            relativeTolerance,
+            msg=(
+                "PWC midpoint approximation did not converge sufficiently "
+                "to the PWL final velocity. "
+                f"PWL velocity: {finalPwlVelocity:.6f}, "
+                f"PWC velocity: {finalPwcVelocity:.6f}, "
+                f"relative error: {relativeVelocityError:.6e}."
+            )
+        )
+
+        if plotDebug:
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 10))
+
+            ax1.plot(pwlIntervalCounts, pwlTimes, marker="o", label="pwl")
+            ax1.plot(intervalCounts, times, marker="o", color="orange", label="pwc midpoint")
+            ax1.set_xlabel("Number of intervals")
+            ax1.set_ylabel("Duration [s]")
+            ax1.grid(True, which="both", linestyle="--", alpha=0.5)
+            ax1.legend(loc="upper right")
+
+            ax2.plot(pwlIntervalCounts, pwlVelocities, marker="o", label="pwl")
+            ax2.plot(intervalCounts, velocities, marker="o", color="orange", label="pwc midpoint")
+            ax2.set_xlabel("Number of intervals")
+            ax2.set_ylabel("Velocity [m/s]")
+            ax2.grid(True, which="both", linestyle="--", alpha=0.5)
+            ax2.legend(loc="upper right")
+
+            fig.tight_layout()
+            plt.show()
+
+
+    def testPWLProfile(self):
+        '''
+        Should result in same target altitude
+        '''
+
 
     def testLinearGradient(self):
         '''

@@ -135,6 +135,10 @@ class Train():
 
     def checkFields(self):
 
+        if self.length is None or self.length < 0 or np.isinf(self.length):
+
+            raise ValueError("Train length must be a positive number, not {}!".format(self.length))
+
         if self.mass is None or self.mass < 0 or np.isinf(self.mass):
 
             raise ValueError("Train mass must be a positive number, not {}!".format(self.mass))
@@ -190,6 +194,17 @@ class Train():
             if coef is None or coef < 0:
 
                 raise ValueError("Rolling resistance coefficient {} must be positive, not {}!".format('r'+ii, coef))
+
+
+        for crossSection, coef in self.tunnelCoefficients.items():
+
+            if crossSection is None or crossSection <= 0 or np.isinf(crossSection):
+
+                raise ValueError("Tunnel cross section must be positive, not {}!".format(crossSection))
+
+            if coef is None or coef <= 0 or np.isinf(coef):
+
+                raise ValueError("Tunnel resistance coefficient must be positive, not {}!".format(coef))
 
 
     def exportModel(self):
@@ -364,26 +379,21 @@ class TrainIntegrator():
 
             evalPoints = [0] + [i/ns for i in range(1, ns+1)]
 
-            z0 = ca.vertcat(model.states[1], model.states[2])
+            b0 = model.states[1]
             p0 = ca.vertcat(model.controls, model.parameters)
-            zf = self.eval(z0, p0, ca.hcat(evalPoints))
+            bf = self.eval(b0, p0, ca.hcat(evalPoints))
 
             tApprox = model.states[0]
 
-            epsVelSq = 0.0001
             for idx in range(ns):
-                # vCurr = ca.sqrt(ca.fmax(zf[0, idx], epsVelSq))
-                # vNext = ca.sqrt(ca.fmax(zf[0, idx + 1], epsVelSq))
 
-                vCurr = ca.sqrt(zf[0, idx])
-                vNext = ca.sqrt(zf[0, idx + 1])
-
+                vCurr = ca.sqrt(bf[idx])
+                vNext = ca.sqrt(bf[idx+1])
                 tApprox += 2*model.parameters[-1]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
 
-            eval = ca.vertcat(tApprox, zf[0, ns], zf[1, ns])
+            eval = ca.vertcat(tApprox, bf[-1])
 
-            self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('dummy')], [eval])
-
+            self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('ds')], [eval])
 
     def solve(self, time, velocitySquared, ds, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
 
