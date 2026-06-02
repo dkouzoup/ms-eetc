@@ -32,8 +32,8 @@ if __name__ == '__main__':
 
     track = Track(config={'id':'CH_ZH_LU'}, pathJSON='../tracks')
     track = Track(config={'id':'CH_StGallen_Wil'}, pathJSON='../tracks')
-    track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
     track.updateTrainLengthDependentValues(train)
+    track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
 
     opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
 

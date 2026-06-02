@@ -366,8 +366,6 @@ class TrainIntegrator():
             opts = OptionsCVODES(optsDict)
             opts.numApproxSteps = 0
 
-            states = model.states
-
             t0, tf = 0, 1
             cvodesFun = ca.integrator('integrator', 'cvodes', {'x': model.states, 'p': params, 'ode': model.ode}, t0, tf, {'abstol': opts.absTol, 'reltol': opts.relTol})
 
@@ -379,21 +377,22 @@ class TrainIntegrator():
 
             evalPoints = [0] + [i/ns for i in range(1, ns+1)]
 
-            b0 = model.states[1]
+            z0 = ca.vertcat(model.states[1], model.states[2])
             p0 = ca.vertcat(model.controls, model.parameters)
-            bf = self.eval(b0, p0, ca.hcat(evalPoints))
+            zf = self.eval(z0, p0, ca.hcat(evalPoints))  # zf[0, idx]: velSq, zf[1, idx]: pos
 
             tApprox = model.states[0]
 
             for idx in range(ns):
 
-                vCurr = ca.sqrt(bf[idx])
-                vNext = ca.sqrt(bf[idx+1])
+                vCurr = ca.sqrt(zf[0, idx])
+                vNext = ca.sqrt(zf[0, idx+1])
                 tApprox += 2*model.parameters[-1]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
 
-            eval = ca.vertcat(tApprox, bf[-1])
+            eval = ca.vertcat(tApprox, zf[0, ns], zf[1, ns])
 
             self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('ds')], [eval])
+
 
     def solve(self, time, velocitySquared, ds, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
 

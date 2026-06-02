@@ -641,6 +641,10 @@ class Track():
 
             return
 
+        # assume train starts on a flat track
+        gradientValues = np.r_[0, gradientValues]
+        gradientPositions = np.r_[-trainLength, gradientPositions]
+
         # Each original gradient jump is spread linearly over one train length assuming uniform mass.
         # The first point has no previous gradient, so its slope contribution is zero.
         gradientJumpSlopes = np.r_[0.0, (gradientValues[1:] - gradientValues[:-1]) / trainLength]
@@ -649,8 +653,8 @@ class Track():
         adjustedPositions = np.sort(np.unique(np.r_[gradientPositions, gradientPositions + trainLength]))
         adjustedPositions = adjustedPositions[adjustedPositions < self.length]
 
-        adjustedGradients = [gradientValues[0]]
-        gradientLinearTerms = [0.0]
+        adjustedGradients = [0]
+        gradientLinearTerms = [gradientValues[0]/trainLength]
 
         epsilon = 1e-3
 
@@ -675,7 +679,11 @@ class Track():
             adjustedGradients.append(currentGradient)
             gradientLinearTerms.append(currentLinearTerm)
 
-        # plotGradients(self, np.asarray(pos_adj, dtype=float), np.asarray(g_adj, dtype=float), np.asarray(g_linear, dtype=float))
+        adjustedPositions = adjustedPositions[1:]
+        adjustedGradients = adjustedGradients[1:]
+        gradientLinearTerms = gradientLinearTerms[1:]
+
+        # plotGradients(self, np.asarray(adjustedPositions, dtype=float), np.asarray(adjustedGradients, dtype=float), np.asarray(gradientLinearTerms, dtype=float))
 
         self.gradients = pd.DataFrame({"Gradient [permil]": adjustedGradients, "Gradient linear term [permil/m]": gradientLinearTerms}, index=adjustedPositions)
 
@@ -694,6 +702,8 @@ class Track():
         if len(curvaturePositions) <= 1:
 
             return
+
+         # todo: same as gradient
 
         # Each original curvature jump is spread linearly over one train length assuming uniform mass.
         # The first point has no previous curvature, so its slope contribution is zero.
