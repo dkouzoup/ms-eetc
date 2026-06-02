@@ -10,28 +10,52 @@ Open-source code for paper: "Direct Multiple Shooting for Computationally Effici
 
 ### Windows
 
-- Tested with Python 3.9.13 on Windows 10 (10.0.19044)
+Tested with Python 3.9.13 on Windows 10 (10.0.19044)
 
-- Open terminal in root folder of repository and type `python -m venv .env` to create a virtual environment
+1. Open a terminal in the root folder of the repository and create a virtual environment:
 
-    - `.env` is an example for the folder name, you may choose any other name
+   ```
+   python -m venv .env
+   ```
 
-- Activate the virtual environment: `.\.env\Scripts\activate`
+   > `.env` is an example name; any other name may be used.
 
-- Install dependencies with: `pip install -r requirements.txt`
+2. Activate the virtual environment:
 
-- deactivate virtual environment by typing: `deactivate`
+   ```
+   .\.env\Scripts\activate
+   ```
+
+3. Install the package:
+
+   ```
+   pip install -e .
+   ```
+
+4. Deactivate the virtual environment when finished:
+
+   ```
+   deactivate
+   ```
 
 ### Linux
 
-- Same as on Windows but use `source .env/bin/activate` to activate virtual environment
+Same as on Windows, but activate the virtual environment with:
+
+```
+source .env/bin/activate
+```
 
 # Simulations
 
-- Open a terminal and activate the virtual environment (see instructions above)
+1. Open a terminal and activate the virtual environment (see instructions above).
 
-- Go to the `simulations` folder and run a script of your choice
+2. Navigate to the `simulations` folder and run a script of your choice. For example:
 
-    - Example: `python figure5.py` to generate Figure 5 of paper (`figure5.pdf`)
+   ```
+   python figure5.py
+   ```
 
-- Latex fonds on the plots will be used only if a valid latex installation is found
+   This generates Figure 5 of the paper (`figure5.pdf`).
+
+3. LaTeX fonts on the plots will be used only if a valid LaTeX installation is found.

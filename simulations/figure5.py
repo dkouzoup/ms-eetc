@@ -1,15 +1,12 @@
-import sys
-sys.path.append('..')
-
 import json
 
 import matplotlib.pyplot as plt
 
-from ocp import casadiSolver
-from train import Train
-from track import Track
-from utils import latexify, show, saveFig, postProcessDataFrame
-from efficiency import totalLossesFunction
+from mseetc.ocp import casadiSolver
+from mseetc.train import Train
+from mseetc.track import Track
+from mseetc.utils import latexify, show, saveFig, postProcessDataFrame
+from mseetc.efficiency import totalLossesFunction
 
 
 def plot(df0b_list, df1b_list, df2b_list, tp, figSize=None, filename=None):
@@ -87,7 +84,7 @@ if __name__ == '__main__':
     v0 = 1
     vN = 100/3.6
 
-    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'})
     train.forceMinPn = 0
 
     etaMax = 0.73
@@ -108,7 +105,7 @@ if __name__ == '__main__':
 
         tripTime = minimumTime*(1 + tp/100)
 
-        track = Track(config={'id':'00_var_speed_limit_100'}, pathJSON='../tracks')
+        track = Track(config={'id':'00_var_speed_limit_100'})
         track.updateLimits(positionEnd=8500)
 
         with open('config.json') as file:

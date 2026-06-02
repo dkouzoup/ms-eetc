@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 import casadi as ca
 
-from train import *
+from mseetc.train import *
 
-from track import computeDiscretizationPoints
+from mseetc.track import computeDiscretizationPoints
 
-from utils import Options, var, postProcessDataFrame, splitLosses
+from mseetc.utils import Options, var, postProcessDataFrame, splitLosses
 
 
 class OptionsCasadiSolver(Options):
@@ -411,8 +411,8 @@ class casadiSolver():
 
 if __name__ == '__main__':
 
-    from train import Train
-    from track import Track
+    from mseetc.train import Train
+    from mseetc.track import Track
 
     # Example on how to solve an OCP
 

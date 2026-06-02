@@ -1,15 +1,12 @@
-import sys
-sys.path.append('..')
-
 import json
 
 import pandas as pd
 
-from utils import postProcessDataFrame
-from train import Train
-from track import Track
-from ocp import casadiSolver
-from efficiency import totalLossesFunction
+from mseetc.utils import postProcessDataFrame
+from mseetc.train import Train
+from mseetc.track import Track
+from mseetc.ocp import casadiSolver
+from mseetc.efficiency import totalLossesFunction
 
 
 if __name__ == '__main__':
@@ -17,14 +14,14 @@ if __name__ == '__main__':
     v0 = 1
     vN = 1
 
-    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'})
     train.forceMinPn = 0
 
     fun = totalLossesFunction(train, auxiliaries=27000, etaGear=0.96)
 
     train.powerLosses = fun
 
-    track = Track(config={'id':'00_var_speed_limit_100'}, pathJSON='../tracks')
+    track = Track(config={'id':'00_var_speed_limit_100'})
     tripTime = 1541
 
     with open('config.json') as file:

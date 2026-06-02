@@ -1,12 +1,12 @@
 import json
 import math
-import os
 import sys
+from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils import checkTTOBenchVersion, convertUnit
+from mseetc.utils import checkTTOBenchVersion, convertUnit
 
 def importTuples(tuples, xLabel, yLabels):
     """
@@ -111,7 +111,7 @@ class Track():
 
     CURVATURE_THRESHOLD = 1/150 # absolute value of maximum allowed cruvature [1/m]
 
-    def __init__(self, config, pathJSON='tracks'):
+    def __init__(self, config, pathJSON=Path(__file__).parent.parent / 'tracks'):
         """
         Constructor of Track objects.
         """
@@ -126,7 +126,7 @@ class Track():
             raise ValueError("Track ID must be specified in configuration!")
 
         # open json file
-        filename = os.path.join(pathJSON, config['id']+'.json')
+        filename = Path(pathJSON) / (config['id'] + '.json')
 
         with open(filename) as file:
 

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from figure6 import runSimulation
 
-from utils import latexify, show, saveFig
+from mseetc.utils import latexify, show, saveFig
 
 
 def plotColormapZV(df_perfect, df_static, df_dynamic, train, figSize=None, filename=None):

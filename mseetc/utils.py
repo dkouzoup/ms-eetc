@@ -260,7 +260,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
 
     elif integrateLosses:
 
-        from train import TrainIntegrator
+        from .train import TrainIntegrator
 
         trainIntegrator = TrainIntegrator(train.exportModel(), 'RK')
         powTr, powRgb = splitLosses(train.powerLosses)
@@ -295,7 +295,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
 
     if integrateRollingResistance:
 
-        from train import TrainIntegrator
+        from .train import TrainIntegrator
 
         trainIntegrator = TrainIntegrator(train.exportModel(), 'RK')
         trainIntegrator.initRollingResistance(solver='CVODES')

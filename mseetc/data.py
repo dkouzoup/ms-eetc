@@ -1,4 +1,3 @@
-
 def dataLosses():
 
     configA = {
