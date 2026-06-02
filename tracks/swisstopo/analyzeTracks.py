@@ -83,7 +83,7 @@ if __name__ == '__main__':
     opts = {'numIntervals': 1000, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 2}, 'energyOptimal': True}
 
     SBB_track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
-    # SBB_track.updateTrainLengthDependentValues(train)
+    SBB_track.updateTrainLengthDependentValues(train)
     solver = casadiSolver(train, SBB_track, opts)
     dfSBB, statsSBB = solver.solve(duration)
 
