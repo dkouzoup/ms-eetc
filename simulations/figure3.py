@@ -98,7 +98,7 @@ if __name__ == '__main__':
 
     from mseetc.train import Train
 
-    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'})
 
     fun1 = lambda f,v: f*v*(f>0)*(1 - etaMax)/etaMax - (1-etaMax)*f*v*(f<0)
     fun2 = totalLossesFunction(train, auxiliaries=27000, etaGear=0.96)

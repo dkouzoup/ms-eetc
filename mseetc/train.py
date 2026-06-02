@@ -1,13 +1,14 @@
-import os
 import json
+from pathlib import Path
 import numpy as np
 import casadi as ca
 
 from mseetc.utils import Options, checkTTOBenchVersion, convertUnit, splitLosses
 
+
 class Train():
 
-    def __init__(self, config, pathJSON='../trains') -> None:
+    def __init__(self, config, pathJSON=Path(__file__).parent.parent / 'trains') -> None:
         """
         Constructor of Train objects.
         """
@@ -24,7 +25,7 @@ class Train():
             raise ValueError("Train ID must be specified in configuration!")
 
         # open json file
-        filename = os.path.join(pathJSON, config['id']+'.json')
+        filename = Path(pathJSON) / (config['id'] + '.json')
 
         with open(filename) as file:
 

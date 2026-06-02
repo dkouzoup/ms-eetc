@@ -14,14 +14,14 @@ if __name__ == '__main__':
     v0 = 1
     vN = 1
 
-    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'})
     train.forceMinPn = 0
 
     fun = totalLossesFunction(train, auxiliaries=27000, etaGear=0.96)
 
     train.powerLosses = fun
 
-    track = Track(config={'id':'00_var_speed_limit_100'}, pathJSON='../tracks')
+    track = Track(config={'id':'00_var_speed_limit_100'})
     tripTime = 1541
 
     with open('config.json') as file:

@@ -101,7 +101,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
     v0 = 1
     vN = 1
 
-    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'})
 
     if brakeType == 'rg':
 
@@ -122,7 +122,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
     fun2 = totalLossesFunction(train, auxiliaries=27000, etaGear=0.96)
 
     tripTime = 1541 if trackID == '00_var_speed_limit_100' else 1242
-    track = Track(config={'id':trackID}, pathJSON='../tracks')
+    track = Track(config={'id':trackID})
 
     with open('config.json') as file:
 

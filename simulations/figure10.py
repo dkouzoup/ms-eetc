@@ -13,7 +13,7 @@ from mseetc.utils import latexify
 
 vMin = 1
 
-train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
+train = Train(config={'id':'NL_Intercity_VIRM6'})
 train.forceMinPn = 0
 train.forceMin = - train.forceMax
 train.powerMax = 3129277
@@ -21,7 +21,7 @@ train.powerMin = -train.powerMax
 train.etaTraction = 0.73
 train.etaRgBrake = 0.73
 
-track = Track(config={'id':'00_var_speed_limit_100'}, pathJSON='../tracks')
+track = Track(config={'id':'00_var_speed_limit_100'})
 tripTime = 1541
 
 with open('config.json') as file:
