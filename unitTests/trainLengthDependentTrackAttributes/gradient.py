@@ -1,5 +1,4 @@
 import unittest
-from time import perf_counter_ns
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -9,9 +8,12 @@ from track import Track, computeAltitude
 from train import Train, TrainIntegrator
 
 
+plotDebug = False
+
+
 class TestGradient(unittest.TestCase):
 
-    def test_integrator_CVODES(self):
+    def test_cvodes_pwc_midpoint_gradient_converges_to_pwl_gradient(self):
         '''
         Track with a linearly increasing gradient over 1000 m.
 
@@ -43,7 +45,6 @@ class TestGradient(unittest.TestCase):
 
         maxIntervals = 50
         relativeTolerance = 1e-3
-        plotDebug = True
 
         # PWL gradient reference
         out = trainIntegrator.solve(
@@ -149,7 +150,7 @@ class TestGradient(unittest.TestCase):
             plt.show()
 
 
-    def test_integrator_RK(self):
+    def test_rk_pwc_midpoint_gradient_converges_to_pwl_gradient(self):
         '''
         Track with a linearly increasing gradient over 1000 m.
 
@@ -182,7 +183,6 @@ class TestGradient(unittest.TestCase):
 
         maxIntervals = 50
         relativeTolerance = 1e-3
-        plotDebug = True
 
         # PWL gradient reference
         pwlTimes = []
@@ -302,7 +302,7 @@ class TestGradient(unittest.TestCase):
             plt.show()
 
 
-    def test_integrator_RK_with_Time_Approx(self):
+    def test_rk_time_approx_pwc_midpoint_gradient_converges_to_pwl_gradient(self):
         '''
         Track with a linearly increasing gradient over 1000 m.
 
@@ -332,7 +332,6 @@ class TestGradient(unittest.TestCase):
         numIntervals = 50
         timeApproxSteps = 30
         relativeTolerance = 1e-3
-        plotDebug = True
 
         # PWL gradient reference
         pwlTimes = []
@@ -455,7 +454,7 @@ class TestGradient(unittest.TestCase):
             plt.show()
 
 
-    def testPWLProfile(self):
+    def test_train_length_dependent_gradient_preserves_target_altitude(self):
         '''
         Compare the final altitude of the original length-independent gradient profile
         with the train-length-dependent piecewise linear profile.
@@ -463,7 +462,6 @@ class TestGradient(unittest.TestCase):
         Both profiles should start from the same altitude and end at the same target altitude.
         '''
 
-        plotDebug = True
         altitudeTolerance = 1e-6
 
         trainLength = 800   # [m]
@@ -471,7 +469,7 @@ class TestGradient(unittest.TestCase):
 
         # track needs to be flat at least train length meters before the end of the track
         track.gradients = track.gradients[track.gradients.index < track.length - trainLength]
-        track.gradients.loc[track.length - trainLength] = {"Gradient [permil]": 0.0, "Gradient linear term [permil/m]": 0.0}
+        track.gradients.loc[track.length - trainLength] = {"Gradient [permil]": 0.0}
 
         df_alt = computeAltitude(track.gradients, track.length)
 
@@ -529,7 +527,7 @@ class TestGradient(unittest.TestCase):
             plt.show()
 
 
-    def testLinearGradient(self):
+    def test_pwc_gradient_approximation_matches_pwl_gradient_energy(self):
         '''
         Track with 20 permil increase from 1000 m to 2000 m and 20 permil
         decrease from 3000 m to 4000 m.
@@ -540,9 +538,9 @@ class TestGradient(unittest.TestCase):
         Altitude should be 0 m at the end.
         '''
 
-        startPosition = 0 # [m]
-        endPosition = 5000 # [m]
-        duration = 5000/(60/3.6) # [s]
+        startPosition = 0  # [m]
+        endPosition = 5000  # [m]
+        duration = 5000/(60/3.6)  # [s]
 
         altitudeTolerance = 1e-4
         energyRelativeTolerance = 1e-3
@@ -597,8 +595,6 @@ class TestGradient(unittest.TestCase):
             )
         )
 
-        plotDebug = True
-
         if plotDebug:
 
             fig, ax = plt.subplots(figsize=(16, 8))
@@ -617,7 +613,7 @@ class TestGradient(unittest.TestCase):
             plt.show()
 
 
-    def testSmallTrainLengthNotAffectingEnergyConsumption(self):
+    def test_short_train_length_has_negligible_effect_on_energy_consumption(self):
         '''
         Use an artificially short train on a real track profile.
 
@@ -632,10 +628,12 @@ class TestGradient(unittest.TestCase):
         train.length = trainLength
 
         track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tracks')
+        track.curvatures = track.curvatures.iloc[[0]]
+        track.curvatures["Curvature [1/m]"].iloc[0] = 0
 
         # track needs to be flat at least train length meters before the end of the track
         track.gradients = track.gradients[track.gradients.index < track.length - trainLength]
-        track.gradients.loc[track.length - trainLength] = {"Gradient [permil]": 0.0, "Gradient linear term [permil/m]": 0.0}
+        track.gradients.loc[track.length - trainLength] = {"Gradient [permil]": 0.0}
 
         duration = track.length / (80/3.6)
 

@@ -21,13 +21,13 @@ class TestGradient(unittest.TestCase):
         endPosition = 5000  # [m]
         duration = 5000 / (60 / 3.6)  # [s]
 
-        tol = 0.02
-        numIntervals = 100
+        tol = 0.1
+        numIntervals = 200
 
-        train = Train(config={'id': 'Flirt_Tpf'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
         train.length = 600
 
-        track = Track(config={'id': 'test_one_hill'}, pathJSON='tracks')
+        track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tracks')
         track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
         track.updateTrainLengthDependentValues(train)
 

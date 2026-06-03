@@ -8,6 +8,8 @@ import pandas as pd
 from utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints, plotSpeedLimits, plotGradients, \
     plotCurvatures
 
+plotDebug = False
+
 
 def importTuples(tuples, xLabel, yLabels):
     """
@@ -352,6 +354,7 @@ class Track():
         tuples = self.sampleClothoid(tuples, clothoidSamplingInterval)
 
         self.curvatures = importTuples(tuples, 'Position [m]', ['Curvature [1/m]'])
+        self.curvatures["Curvature [1/m]"] = self.curvatures["Curvature [1/m]"].abs()
 
         checkDataFrame(self.curvatures, self.length)
 
@@ -618,7 +621,9 @@ class Track():
                 pos_adj.append(new_pos)
                 v_adj.append(v[i])
 
-            # plotSpeedLimits(self, np.asarray(pos_adj, dtype=float), np.asarray(v_adj, dtype=float))
+            if plotDebug:
+
+                plotSpeedLimits(self, np.asarray(pos_adj, dtype=float), np.asarray(v_adj, dtype=float))
 
             self.speedLimits = pd.DataFrame(
                 {"Speed limit [m/s]": v_adj},
@@ -683,7 +688,9 @@ class Track():
         adjustedGradients = adjustedGradients[1:]
         gradientLinearTerms = gradientLinearTerms[1:]
 
-        # plotGradients(self, np.asarray(adjustedPositions, dtype=float), np.asarray(adjustedGradients, dtype=float), np.asarray(gradientLinearTerms, dtype=float))
+        if plotDebug:
+
+            plotGradients(self, np.asarray(adjustedPositions, dtype=float), np.asarray(adjustedGradients, dtype=float), np.asarray(gradientLinearTerms, dtype=float))
 
         self.gradients = pd.DataFrame({"Gradient [permil]": adjustedGradients, "Gradient linear term [permil/m]": gradientLinearTerms}, index=adjustedPositions)
 
@@ -703,7 +710,9 @@ class Track():
 
             return
 
-         # todo: same as gradient
+        # assume train starts on a straight track
+        curvatureValues = np.r_[0, curvatureValues]
+        curvaturePositions = np.r_[-trainLength, curvaturePositions]
 
         # Each original curvature jump is spread linearly over one train length assuming uniform mass.
         # The first point has no previous curvature, so its slope contribution is zero.
@@ -740,7 +749,13 @@ class Track():
             adjustedCurvatures.append(currentCurvature)
             curvatureLinearTerms.append(currentLinearTerm)
 
-        # plotCurvatures(self, np.asarray(pos_adj, dtype=float), np.asarray(c_adj, dtype=float), np.asarray(c_linear, dtype=float))
+        adjustedPositions = adjustedPositions[1:]
+        adjustedCurvatures = adjustedCurvatures[1:]
+        curvatureLinearTerms = curvatureLinearTerms[1:]
+
+        if plotDebug:
+
+            plotCurvatures(self, np.asarray(adjustedPositions, dtype=float), np.asarray(adjustedCurvatures, dtype=float), np.asarray(curvatureLinearTerms, dtype=float))
 
         self.curvatures = pd.DataFrame({"Curvature [1/m]": adjustedCurvatures, "Curvature linear term [1/m^2]": curvatureLinearTerms}, index=adjustedPositions)
 
