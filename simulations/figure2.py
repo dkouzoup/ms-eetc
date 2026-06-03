@@ -1,13 +1,10 @@
-import sys
-sys.path.append('..')
-
 import numpy as np
 
 import matplotlib.pyplot as plt
 
-from utils import latexify, show, saveFig
-from train import Train
-from efficiency import motorLossesFunction, loadToForce
+from mseetc.utils import latexify, show, saveFig
+from mseetc.train import Train
+from mseetc.efficiency import motorLossesFunction, loadToForce
 
 
 def plotSplines(train, data):
@@ -54,7 +51,7 @@ def plotSplines(train, data):
 
 if __name__ == '__main__':
 
-    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'})
     data = motorLossesFunction(train, detailedOutput=True)
 
     plotSplines(train, data)

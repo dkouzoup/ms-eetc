@@ -1,21 +1,18 @@
-import sys
-sys.path.append('..')
-
 import pandas as pd
 import numpy as np
 import casadi as ca
 
 import matplotlib.pyplot as plt
 
-from utils import vecToNum, IVP, latexify, show, saveFig
-from train import Train, TrainIntegrator
+from mseetc.utils import vecToNum, IVP, latexify, show, saveFig
+from mseetc.train import Train, TrainIntegrator
 
 
 if __name__ == '__main__':
 
     # simulation parameters
 
-    train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../trains')
+    train = Train(config={'id':'NL_Intercity_VIRM6'})
 
     f0 = 0.5  # traction force [N/kg]
     f1 = -f0  # reg. braking force [N/kg]
