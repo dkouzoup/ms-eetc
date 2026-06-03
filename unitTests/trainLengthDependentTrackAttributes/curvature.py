@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from ocp import casadiSolver, OptionsCasadiSolver
-from track import Track
-from train import Train, TrainIntegrator
+from mseetc.ocp import casadiSolver, OptionsCasadiSolver
+from mseetc.track import Track
+from mseetc.train import Train, TrainIntegrator
 
 
 plotDebug = False

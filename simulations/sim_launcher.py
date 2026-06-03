@@ -1,31 +1,38 @@
-from efficiency import totalLossesFunction
-from ocp import casadiSolver
+from mseetc.efficiency import totalLossesFunction
+from mseetc.ocp import casadiSolver
+
 
 def get_power_loss_function(train, mode="perfect",* ,auxiliaries: float = 27_000, eta_gear: float = 0.96):
 
     if mode == "perfect":
+
         return lambda f, v: 0
 
     elif mode == "static":
+
         return lambda f, v: (f>0)*f*v*(1-train.etaTraction)/train.etaTraction - (f<0)*f*v*(1-train.etaRgBrake)
 
     elif mode == "dynamic":
+
         return totalLossesFunction(train, auxiliaries=auxiliaries, etaGear=eta_gear)
 
     else:
+
         raise ValueError("mode must be one of: 'perfect', 'static', 'dynamic'")
+
+
 
 if __name__ == '__main__':
 
-    from train import Train
-    from track import Track
+    from mseetc.train import Train
+    from mseetc.track import Track
 
     # Timetable
     startPosition = 0       # [m]
     endPosition = 20000     # [m]
     duration = 60*20        # [s]
 
-    train = Train(config={'id':'Flirt_Tpf'}, pathJSON='../trains')
+    train = Train(config={'id':'CH_Stadler_FLIRT_TPF'}, pathJSON='../trains')
     train.forceMinPn = 0
     train.withPnBrake = False
     train.powerLosses = get_power_loss_function(train, "static")

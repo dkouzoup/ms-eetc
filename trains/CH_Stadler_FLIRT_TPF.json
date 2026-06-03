@@ -80,16 +80,16 @@
     "tunnel resistance": {
         "units": {
             "cross section": "m^2",
-            "resistance (or similar)": "kg/m"
+            "coefficient": "kN/(km/h)^2"
         },
         "values": [
             [
                 24,
-                15.16
+                0.0011698
             ],
             [
                 40,
-                7.23
+                0.0005579
             ]
         ]
     }

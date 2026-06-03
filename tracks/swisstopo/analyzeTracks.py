@@ -1,10 +1,10 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from ocp import casadiSolver
+from mseetc.ocp import casadiSolver
 from simulations.sim_launcher import get_power_loss_function
-from track import Track
-from train import Train
+from mseetc.track import Track
+from mseetc.train import Train
 
 
 if __name__ == '__main__':

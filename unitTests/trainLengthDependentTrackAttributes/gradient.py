@@ -3,9 +3,9 @@ import unittest
 import numpy as np
 from matplotlib import pyplot as plt
 
-from ocp import casadiSolver, OptionsCasadiSolver
-from track import Track, computeAltitude
-from train import Train, TrainIntegrator
+from mseetc.ocp import casadiSolver, OptionsCasadiSolver
+from mseetc.track import Track, computeAltitude
+from mseetc.train import Train, TrainIntegrator
 
 
 plotDebug = False

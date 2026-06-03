@@ -1,8 +1,8 @@
 import unittest
 
-from ocp import casadiSolver
-from track import Track
-from train import Train
+from mseetc.ocp import casadiSolver
+from mseetc.track import Track
+from mseetc.train import Train
 
 
 class TestGradient(unittest.TestCase):

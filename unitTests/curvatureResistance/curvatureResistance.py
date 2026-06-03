@@ -1,6 +1,5 @@
 import copy
 import numpy as np
-import sys
 import unittest
 
 from mseetc.efficiency import totalLossesFunction

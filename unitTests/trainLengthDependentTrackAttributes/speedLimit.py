@@ -1,13 +1,13 @@
 import unittest
 
-from ocp import casadiSolver
-from track import Track
-from train import Train
+from mseetc.ocp import casadiSolver
+from mseetc.track import Track
+from mseetc.train import Train
 
 
 class TestSpeedLimit(unittest.TestCase):
 
-    def testTrainDoesNotAccelerateToEarly(self):
+    def test_train_length_dependent_speed_limit_delays_acceleration(self):
         '''
         Speed limit increases from 22 m/s to 40 m/s at position 1000 m.
 
@@ -16,46 +16,47 @@ class TestSpeedLimit(unittest.TestCase):
         22 m/s after the whole train has passed the speed-increase position.
         '''
 
-        startPosition = 0 # [m]
-        endPosition = 12000 # [m]
-        duration = 12000/(115/3.6) # [s]
+        startPosition = 0  # [m]
+        endPosition = 12000  # [m]
+        duration = endPosition/(115/3.6)  # [s]
+        speedIncreasePosition = 1000  # [m]
+        speedLimitBeforeIncrease = 22  # [m/s]
+        speedTolerance = 0.001  # [m/s]
 
-        train = Train(config={'id': 'Flirt_Tpf'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
 
         track = Track(config={'id': 'test_one_speed_increase'}, pathJSON='tracks')
         track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
 
         opts = {'numIntervals': 300, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
         solver = casadiSolver(train, track, opts)
-        df1, stats1 = solver.solve(duration)
+        dfWithoutTrainLength, statsWithoutTrainLength = solver.solve(duration)
 
-        speedAfterSpeedIncrease1 = df1[df1['Position [m]'] > 1000].iloc[0]['Velocity [m/s]']
+        speedWithoutTrainLengthAfterIncrease = dfWithoutTrainLength[dfWithoutTrainLength['Position [m]'] > speedIncreasePosition].iloc[0]['Velocity [m/s]']
 
         track.updateTrainLengthDependentValues(train)
 
         opts = {'numIntervals': 300, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
         solver = casadiSolver(train, track, opts)
-        df2, stats2 = solver.solve(duration)
+        dfWithTrainLength, statsWithTrainLength = solver.solve(duration)
 
-        speedAfterSpeedIncrease2 = df2[df2['Position [m]'] > 1000].iloc[0]['Velocity [m/s]']
-        speedAfterSpeedIncrease3 = df2[df2['Position [m]'] > (1000+train.length)].iloc[0]['Velocity [m/s]']
-
-        epsilon = 0.001
+        speedWithTrainLengthAfterIncrease = dfWithTrainLength[dfWithTrainLength['Position [m]'] > speedIncreasePosition].iloc[0]['Velocity [m/s]']
+        speedWithTrainLengthAfterTrainPassedIncrease = dfWithTrainLength[dfWithTrainLength['Position [m]'] > (speedIncreasePosition+train.length)].iloc[0]['Velocity [m/s]']
 
         self.assertGreater(
-            speedAfterSpeedIncrease1,
-            22,
+            speedWithoutTrainLengthAfterIncrease,
+            speedLimitBeforeIncrease,
             msg="Without train-length-dependent values, the train should accelerate immediately after the speed limit increase."
         )
 
         self.assertLessEqual(
-            speedAfterSpeedIncrease2,
-            22 + epsilon,
+            speedWithTrainLengthAfterIncrease,
+            speedLimitBeforeIncrease + speedTolerance,
             msg="With train-length-dependent values, the train should not accelerate before the whole train has passed the speed limit increase."
         )
 
         self.assertGreater(
-            speedAfterSpeedIncrease3,
-            22,
+            speedWithTrainLengthAfterTrainPassedIncrease,
+            speedLimitBeforeIncrease,
             msg="With train-length-dependent values, the train should accelerate after the whole train has passed the speed limit increase."
         )
