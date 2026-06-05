@@ -1,4 +1,6 @@
 from bisect import bisect_right
+from idlelib.editor import prepstr
+from multiprocessing.spawn import prepare
 
 import numpy as np
 import pandas as pd
@@ -38,26 +40,33 @@ def compute_A_gradient(currentPosition, gradients):
 
     idx = bisect_right(positions, currentPosition)
     idx = max(0, min(idx, len(positions) - 1))
+
+    if idx == 0:
+
+        return 0
+
     gradient = gradients[idx-1]
-
     A_gradient = 9.81 * gradient * 0.001
-
     return A_gradient
 
 
-def compute_braking_curve(braking_profile, gradients, target_position, permittedVelocity, dt=0.1):
+def compute_braking_curve(braking_profile, gradients, target_position, permittedVelocity, targetVerlocity, dt=0.1):
 
     max_velocity = permittedVelocity * 1.4
 
     positions = [target_position]
-    velocities = [0.0]
+    velocities = [targetVerlocity]
 
     threshold_velocities = list(braking_profile["velocity [m/s]"])
     braking_values = list(braking_profile["value [m/s^2]"])
 
-    threshold_velocities.append(max_velocity)
+    threshold_velocities.append(200)  # basically inf velocity
 
     for idx in range(len(threshold_velocities) - 1):
+
+        if targetVerlocity > threshold_velocities[idx + 1]:
+
+            continue
 
         threshold_velocity = threshold_velocities[idx + 1]
         A_brake = braking_values[idx]
@@ -91,7 +100,7 @@ def compute_braking_curve(braking_profile, gradients, target_position, permitted
     return curve
 
 
-def compute_EBI_curve(EBD_curve, trainBrakingData):
+def compute_EBI_curve(EBD_curve, trainBrakingData, targetSpeed):
 
     positionsEBD = EBD_curve.index.to_numpy()
     velocitiesEBD = EBD_curve["Velocity [m/s]"].to_numpy()
@@ -114,6 +123,14 @@ def compute_EBI_curve(EBD_curve, trainBrakingData):
 
         V_est = (vel - A_est1*T_traction - A_est2*T_berem)/(1+v_uncertainty)
         V_est = max(V_est, 0.0)
+
+        if V_est < targetSpeed:
+
+            velocitiesEBI.append(targetSpeed)
+            positionsEBI.append(positionsEBI[-1]+1)
+
+            break
+
         velocitiesEBI.append(V_est)
 
         V_delta_0 = V_est * v_uncertainty
@@ -164,7 +181,8 @@ def compute_SBI_curve(SBI1_curve, SBI2_curve):
     maxPosition = min(positionsSBI1.max(), positionsSBI2.max())
 
     step = 10.0  # [m]
-    positionsSBI = np.arange(minPosition, maxPosition, step)
+    positionsSBI = np.arange(minPosition, maxPosition + step, step)
+    positionsSBI[-1] = maxPosition
 
     velocitiesSBI1_interpol = np.interp(positionsSBI, positionsSBI1, velocitiesSBI1)
     velocitiesSBI2_interpol = np.interp(positionsSBI, positionsSBI2, velocitiesSBI2)
@@ -198,11 +216,17 @@ def getCurveStyles():
     return curveStyles
 
 
-def plotCurves(curves):
+def plotCurves(curves, targetPosition, permittedSpeed, targetSpeed, prePottingDistance, postPlottingDistance):
 
     curveStyles = getCurveStyles()
 
     fig, ax = plt.subplots(figsize=(16, 8))
+
+    ax.step(
+        np.array([targetPosition - prePottingDistance, targetPosition, targetPosition + postPlottingDistance]) / 1000,
+        np.array([permittedSpeed, permittedSpeed, targetSpeed]) * 3.6,
+        label="Speed limit", color="black", linewidth= 2.0
+    )
 
     for name, curve in curves.items():
 
@@ -251,19 +275,42 @@ def computeCeilingSpeedLimits(V_permitted_mps):
 
 def addStartPointToCurve(curve, velocity, start_position):
 
+    delta_s = curve.index.to_numpy(dtype=float)[1] - curve.index.to_numpy(dtype=float)[0]
+
     start_point = pd.DataFrame(
-        {"Velocity [m/s]": [velocity,velocity]},
-        index=[start_position, curve.index.to_numpy(dtype=float)[0]-10],
+        {"Velocity [m/s]": [velocity, velocity]},
+        index=[start_position, curve.index.to_numpy(dtype=float)[0] - delta_s],
     )
     start_point.index.name = "Position [m]"
 
     return pd.concat([start_point, curve])
 
 
+def addEndPointToCurve(curve, velocity, end_position):
+
+    delta_s = curve.index.to_numpy(dtype=float)[-1] - curve.index.to_numpy(dtype=float)[-2]
+
+    end_point = pd.DataFrame(
+        {"Velocity [m/s]": [velocity, velocity]},
+        index=[curve.index.to_numpy(dtype=float)[-1] + delta_s, end_position],
+    )
+    end_point.index.name = "Position [m]"
+
+    return pd.concat([curve, end_point])
+
+
 def trimCurveToMaxVelocity(curve, maxVelocity):
 
     velocities = curve["Velocity [m/s]"].to_numpy(dtype=float)
     keep_mask = velocities <= maxVelocity
+
+    return curve[keep_mask].copy()
+
+
+def trimCurveFromMinVelocity(curve, minVelocity):
+
+    velocities = curve["Velocity [m/s]"].to_numpy(dtype=float)
+    keep_mask = velocities >= minVelocity
 
     return curve[keep_mask].copy()
 
@@ -276,9 +323,9 @@ def trimCurveFromMinPosition(curve, minPosition):
     return curve[keep_mask].copy()
 
 
-def postProcessCurves(curves, permittedSpeed):
+def postPreProcessCurves(curves, targetPosition, permittedSpeed, plottingDistance):
 
-    start_position = curves["P"].index.to_numpy(dtype=float)[-1] - 3000
+    start_position = targetPosition - plottingDistance
 
     speedLimits = computeCeilingSpeedLimits(permittedSpeed)
 
@@ -304,6 +351,37 @@ def postProcessCurves(curves, permittedSpeed):
     curves["SBD"] = trimCurveFromMinPosition(curves["SBD"], curves["SBI"].index.to_numpy(dtype=float)[2])
 
     curves["SBI1"] = trimCurveFromMinPosition(curves["SBI1"], curves["SBI"].index.to_numpy(dtype=float)[2])
+
+    return curves
+
+
+def postPostProcessCurves(curves, targetPosition, targetSpeed, postPlottingDistance):
+
+    end_position = targetPosition + postPlottingDistance
+
+    speedLimits = computeCeilingSpeedLimits(targetSpeed)
+
+    curves["EBI"] = trimCurveFromMinVelocity(curves["EBI"], speedLimits["EBI [m/s]"])
+    curves["EBI"] = addEndPointToCurve(curves["EBI"], speedLimits["EBI [m/s]"], end_position)
+
+    curves["SBI"] = trimCurveFromMinVelocity(curves["SBI"], speedLimits["SBI [m/s]"])
+    curves["SBI"] = addEndPointToCurve(curves["SBI"], speedLimits["SBI [m/s]"], end_position)
+
+    curves["W"] = trimCurveFromMinVelocity(curves["W"], speedLimits["Warning [m/s]"])
+    curves["W"] = addEndPointToCurve(curves["W"], speedLimits["Warning [m/s]"], end_position)
+
+    curves["P"] = addEndPointToCurve(curves["P"], targetSpeed, end_position)
+
+    curves["I"] = addEndPointToCurve(curves["I"], targetSpeed, curves["P"].index.to_numpy(dtype=float)[-4])
+
+
+    curves["EBD"] = trimCurveFromMinVelocity(curves["EBD"], speedLimits["EBI [m/s]"])
+
+    curves["SBI2"] = trimCurveFromMinVelocity(curves["SBI2"], speedLimits["SBI [m/s]"])
+
+    curves["SBD"] = trimCurveFromMinVelocity(curves["SBD"], speedLimits["EBI [m/s]"])
+
+    curves["SBI1"] = trimCurveFromMinVelocity(curves["SBI1"], speedLimits["SBI [m/s]"])
 
     return curves
 
@@ -386,25 +464,34 @@ if __name__ == '__main__':
     targetPosition = 5000  # [m]
     overlap = 100  # [m]
     permittedSpeed = 160 / 3.6  # [m/s]
-    targetSpeed = 0  # [m/s]
+    targetSpeed = 24  # [m/s]
+
+    prepPlottingDistance = 3000  # [m]
+    postPlottingDistance = 1000  # [m]
 
     SvL = targetPosition + overlap
     EoA = targetPosition
 
+    assert permittedSpeed >= 0 and permittedSpeed < 400 / 3.6
+
     assert targetPosition > 0 and targetPosition < track.length
+
+    assert targetSpeed >= 0 and targetSpeed < permittedSpeed
 
 
     df_A_brake_safe = compute_A_brake_safe(trainBrakingData)
 
+    T_indication = max(0.8 * trainBrakingData["T_bs [s]"], 5) + T_driver
+
     curves = {}
 
-    curves["EBD"] = compute_braking_curve(df_A_brake_safe, track.gradients, SvL, permittedSpeed)
+    curves["EBD"] = compute_braking_curve(df_A_brake_safe, track.gradients, SvL, permittedSpeed, targetSpeed)
 
-    curves["EBI"] = compute_EBI_curve(curves["EBD"], trainBrakingData)
+    curves["EBI"] = compute_EBI_curve(curves["EBD"], trainBrakingData, targetSpeed)
 
     curves["SBI2"] = shift_curve_by_time(curves["EBI"], trainBrakingData["T_bs2 [s]"])
 
-    curves["SBD"] = compute_braking_curve(trainBrakingData["A_brake_service [m/s^2]"], track.gradients, EoA, permittedSpeed)
+    curves["SBD"] = compute_braking_curve(trainBrakingData["A_brake_service [m/s^2]"], track.gradients, EoA, permittedSpeed, targetSpeed)
 
     curves["SBI1"] = shift_curve_by_time(curves["SBD"], trainBrakingData["T_bs1 [s]"])
 
@@ -414,12 +501,15 @@ if __name__ == '__main__':
 
     curves["P"] = shift_curve_by_time(curves["SBI"], T_driver)
 
-    T_indication = max(0.8 * trainBrakingData["T_bs [s]"], 5) + T_driver
     curves["I"] = shift_curve_by_time(curves["P"], T_indication)
 
-    curves = postProcessCurves(curves, permittedSpeed)
+    curves = postPreProcessCurves(curves, targetPosition, permittedSpeed, prepPlottingDistance)
 
-    plotCurves(curves)
+    if targetSpeed > 0:
 
-    approximation = computeStepApproximation(curves["P"])
-    plotApproximation(approximation, curves["P"], "P")
+        curves = postPostProcessCurves(curves, targetPosition, targetSpeed, postPlottingDistance)
+
+    plotCurves(curves, targetPosition, permittedSpeed, targetSpeed, prepPlottingDistance, postPlottingDistance)
+
+    # approximation = computeStepApproximation(curves["P"])
+    # plotApproximation(approximation, curves["P"], "P")
