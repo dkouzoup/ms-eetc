@@ -116,72 +116,85 @@ def computeDiscretizationPoints(track, numIntervals, opts):
     return df3
 
 
-def adaptConstantTrackAttributesToNewShootingNodes(df3, numIntervals):
+def adaptConstantTrackAttributesToNewShootingNodes(df, numIntervals):
+    '''
+    Adapt gradient and curvature values to the current shooting nodes.
 
-    if "Gradient linear term [permil/m]" in df3.columns:
+    For piecewise linear profiles, the constant term at each node is updated using the linear term from the previous interval.
 
-        positions = df3.index.to_numpy(dtype=float)
-        grads = [df3["Gradient [permil]"].iloc[0]]
+    Example:
+        Gradient at 0 m is 10 permil and the linear term is 0.01 permil/m.
+        At a new shooting node at 100 m, the gradient becomes:
 
-        for idx in range(1, numIntervals + 1):
+            10 + 100 * 0.01 = 11 permil
 
-            if np.isclose(df3["Gradient [permil]"].iloc[idx - 1], df3["Gradient [permil]"].iloc[idx]):
+        Without a linear term, the value would remain 10 permil.
+    '''
 
-                grads.append(grads[-1] + (positions[idx] - positions[idx - 1]) * df3["Gradient linear term [permil/m]"].iloc[idx - 1])
+    if "Gradient linear term [permil/m]" in df.columns:
 
-            else:
-
-                grads.append(df3["Gradient [permil]"].iloc[idx])
-
-        df3["Gradient [permil]"] = grads
-
-    else:
-
-        df3["Gradient linear term [permil/m]"] = np.zeros(len(df3))
-
-
-    if "Curvature linear term [1/m^2]" in df3.columns:
-
-        positions = df3.index.to_numpy(dtype=float)
-        curvs = [df3["Curvature [1/m]"].iloc[0]]
+        positions = df.index.to_numpy(dtype=float)
+        grads = [df["Gradient [permil]"].iloc[0]]
 
         for idx in range(1, numIntervals + 1):
 
-            if np.isclose(df3["Curvature [1/m]"].iloc[idx - 1], df3["Curvature [1/m]"].iloc[idx]):
+            if np.isclose(df["Gradient [permil]"].iloc[idx - 1], df["Gradient [permil]"].iloc[idx]):
 
-                curvs.append(curvs[-1] + (positions[idx] - positions[idx - 1]) * df3["Curvature linear term [1/m^2]"].iloc[idx - 1])
+                grads.append(grads[-1] + (positions[idx] - positions[idx - 1]) * df["Gradient linear term [permil/m]"].iloc[idx - 1])
 
             else:
 
-                curvs.append(df3["Curvature [1/m]"].iloc[idx])
+                grads.append(df["Gradient [permil]"].iloc[idx])
 
-        df3["Curvature [1/m]"] = curvs
+        df["Gradient [permil]"] = grads
 
     else:
 
-        df3["Curvature linear term [1/m^2]"] = np.zeros(len(df3))
+        df["Gradient linear term [permil/m]"] = np.zeros(len(df))
 
 
-def makePwcLengthDependentTrackAttibutes(df3):
+    if "Curvature linear term [1/m^2]" in df.columns:
 
-    positions = df3.index.to_numpy(dtype=float)
+        positions = df.index.to_numpy(dtype=float)
+        curvs = [df["Curvature [1/m]"].iloc[0]]
 
-    g_pwl = df3["Gradient [permil]"].to_numpy(dtype=float)
-    g_linear = df3["Gradient linear term [permil/m]"].to_numpy(dtype=float)
+        for idx in range(1, numIntervals + 1):
 
-    c_pwl = df3["Curvature [1/m]"].to_numpy(dtype=float)
-    c_linear = df3["Curvature linear term [1/m^2]"].to_numpy(dtype=float)
+            if np.isclose(df["Curvature [1/m]"].iloc[idx - 1], df["Curvature [1/m]"].iloc[idx]):
+
+                curvs.append(curvs[-1] + (positions[idx] - positions[idx - 1]) * df["Curvature linear term [1/m^2]"].iloc[idx - 1])
+
+            else:
+
+                curvs.append(df["Curvature [1/m]"].iloc[idx])
+
+        df["Curvature [1/m]"] = curvs
+
+    else:
+
+        df["Curvature linear term [1/m^2]"] = np.zeros(len(df))
+
+
+def makePwcLengthDependentTrackAttibutes(df):
+
+    positions = df.index.to_numpy(dtype=float)
+
+    g_pwl = df["Gradient [permil]"].to_numpy(dtype=float)
+    g_linear = df["Gradient linear term [permil/m]"].to_numpy(dtype=float)
+
+    c_pwl = df["Curvature [1/m]"].to_numpy(dtype=float)
+    c_linear = df["Curvature linear term [1/m^2]"].to_numpy(dtype=float)
 
     ds = positions[1:] - positions[:-1]
 
     g_pwc = g_pwl[:-1] + 0.5 * g_linear[:-1] * ds
     c_pwc = c_pwl[:-1] + 0.5 * c_linear[:-1] * ds
 
-    df3["Gradient [permil]"] = np.r_[g_pwc, g_pwc[-1]]
-    df3["Curvature [1/m]"] = np.r_[c_pwc, c_pwc[-1]]
+    df["Gradient [permil]"] = np.r_[g_pwc, g_pwc[-1]]
+    df["Curvature [1/m]"] = np.r_[c_pwc, c_pwc[-1]]
 
-    df3["Gradient linear term [permil/m]"] = np.zeros(len(df3))
-    df3["Curvature linear term [1/m^2]"] = np.zeros(len(df3))
+    df["Gradient linear term [permil/m]"] = np.zeros(len(df))
+    df["Curvature linear term [1/m^2]"] = np.zeros(len(df))
 
 
 class Track():
@@ -631,100 +644,51 @@ class Track():
             )
 
 
-    def updateGradientsToTrainLength(self, trainLength):
+    def updateTrackAttributeToTrainLength(self, df, trainLength):
         """
-        Convert pointwise gradient changes into train-length-dependent piecewise linear gradients.
+        Convert pointwise track attribute changes into train-length-dependent piecewise linear values.
 
-        A gradient step at position s does not affect the whole train at once.
-        Instead, its effect is spread over one train length, from s to s + trainLength.
+        A step at position s does not affect the whole train at once. Instead, its
+        effect is spread over one train length, from s to s + trainLength.
         """
 
-        gradientValues = self.gradients["Gradient [permil]"].to_numpy(dtype=float)
-        gradientPositions = self.gradients.index.to_numpy(dtype=float)
+        if "Gradient [permil]" in df.columns:
 
-        if len(gradientPositions) <= 1:
+            valueColumn = "Gradient [permil]"
+            linearTermColumn = "Gradient linear term [permil/m]"
+            plotFunction = plotGradients
 
-            return
+        elif "Curvature [1/m]" in df.columns:
 
-        # assume train starts on a flat track
-        gradientValues = np.r_[0, gradientValues]
-        gradientPositions = np.r_[-trainLength, gradientPositions]
+            valueColumn = "Curvature [1/m]"
+            linearTermColumn = "Curvature linear term [1/m^2]"
+            plotFunction = plotCurvatures
 
-        # Each original gradient jump is spread linearly over one train length assuming uniform mass.
-        # The first point has no previous gradient, so its slope contribution is zero.
-        gradientJumpSlopes = np.r_[0.0, (gradientValues[1:] - gradientValues[:-1]) / trainLength]
+        else:
 
-        # New breakpoints occur both when the front of the train reaches a gradient and when the rear of the train has passed it.
-        adjustedPositions = np.sort(np.unique(np.r_[gradientPositions, gradientPositions + trainLength]))
+            raise ValueError("Unknown track attribute DataFrame!")
+
+        values = df[valueColumn].to_numpy(dtype=float)
+        positions = df.index.to_numpy(dtype=float)
+
+        if len(positions) <= 1:
+
+            return df
+
+        # Assume the train starts before the track with a flat and straight track.
+        values = np.r_[0.0, values]
+        positions = np.r_[-trainLength, positions]
+
+        # Each original step is spread linearly over one train length assuming uniform mass.
+        # The first point has no previous value, so its slope contribution is zero.
+        jumpSlopes = np.r_[0.0, (values[1:] - values[:-1]) / trainLength]
+
+        # New breakpoints occur both when the front of the train reaches a step and when the rear of the train has passed it.
+        adjustedPositions = np.sort(np.unique(np.r_[positions, positions + trainLength]))
         adjustedPositions = adjustedPositions[adjustedPositions < self.length]
 
-        adjustedGradients = [0]
-        gradientLinearTerms = [gradientValues[0]/trainLength]
-
-        epsilon = 1e-3
-
-        for idx in range(1,len(adjustedPositions)):
-
-            currentPosition = adjustedPositions[idx]
-            previousPosition = adjustedPositions[idx - 1]
-
-            intervalLength = currentPosition - previousPosition
-
-            # Continue the previous linear gradient to the current position.
-            currentGradient = adjustedGradients[-1] + intervalLength * gradientLinearTerms[-1]
-
-            # Active gradient jumps are those currently within one train length behind the train front.
-            activeJumpMask = (
-                    (currentPosition - trainLength + epsilon < gradientPositions)
-                    & (gradientPositions < currentPosition + epsilon)
-            )
-
-            currentLinearTerm = np.sum(gradientJumpSlopes[activeJumpMask])
-
-            adjustedGradients.append(currentGradient)
-            gradientLinearTerms.append(currentLinearTerm)
-
-        adjustedPositions = adjustedPositions[1:]
-        adjustedGradients = adjustedGradients[1:]
-        gradientLinearTerms = gradientLinearTerms[1:]
-
-        if plotDebug:
-
-            plotGradients(self, np.asarray(adjustedPositions, dtype=float), np.asarray(adjustedGradients, dtype=float), np.asarray(gradientLinearTerms, dtype=float))
-
-        self.gradients = pd.DataFrame({"Gradient [permil]": adjustedGradients, "Gradient linear term [permil/m]": gradientLinearTerms}, index=adjustedPositions)
-
-
-    def updateCurvaturesToTrainLength(self, trainLength):
-        """
-        Convert pointwise curvature changes into train-length-dependent piecewise linear curvatures.
-
-        A curvature step at position s does not affect the whole train at once.
-        Instead, its effect is spread over one train length, from s to s + trainLength.
-        """
-
-        curvatureValues = self.curvatures["Curvature [1/m]"].to_numpy(dtype=float)
-        curvaturePositions = self.curvatures.index.to_numpy(dtype=float)
-
-        if len(curvaturePositions) <= 1:
-
-            return
-
-        # assume train starts on a straight track
-        curvatureValues = np.r_[0, curvatureValues]
-        curvaturePositions = np.r_[-trainLength, curvaturePositions]
-
-        # Each original curvature jump is spread linearly over one train length assuming uniform mass.
-        # The first point has no previous curvature, so its slope contribution is zero.
-        curvatureJumpSlopes = np.r_[0.0, (curvatureValues[1:] - curvatureValues[:-1]) / trainLength]
-
-        # New breakpoints occur both when the front of the train reaches a curvature
-        # change and when the rear of the train has passed it.
-        adjustedPositions = np.sort(np.unique(np.r_[curvaturePositions, curvaturePositions + trainLength]))
-        adjustedPositions = adjustedPositions[adjustedPositions < self.length]
-
-        adjustedCurvatures = [curvatureValues[0]]
-        curvatureLinearTerms = [0.0]
+        adjustedValues = [0.0]
+        linearTerms = [0.0]
 
         epsilon = 1e-3
 
@@ -735,29 +699,47 @@ class Track():
 
             intervalLength = currentPosition - previousPosition
 
-            # Continue the previous linear curvature to the current position.
-            currentCurvature = adjustedCurvatures[-1] + intervalLength * curvatureLinearTerms[-1]
+            # Continue the previous linear value to the current position.
+            currentValue = adjustedValues[-1] + intervalLength * linearTerms[-1]
 
-            # Active curvature jumps are those currently within one train length behind the train front.
+            # Active jumps are those currently within one train length behind the train front.
             activeJumpMask = (
-                    (currentPosition - trainLength + epsilon < curvaturePositions)
-                    & (curvaturePositions < currentPosition + epsilon)
+                    (currentPosition - trainLength + epsilon < positions)
+                    & (positions < currentPosition + epsilon)
             )
 
-            currentLinearTerm = np.sum(curvatureJumpSlopes[activeJumpMask])
+            currentLinearTerm = np.sum(jumpSlopes[activeJumpMask])
 
-            adjustedCurvatures.append(currentCurvature)
-            curvatureLinearTerms.append(currentLinearTerm)
+            adjustedValues.append(currentValue)
+            linearTerms.append(currentLinearTerm)
 
+        # Remove artificial point at -trainLength.
         adjustedPositions = adjustedPositions[1:]
-        adjustedCurvatures = adjustedCurvatures[1:]
-        curvatureLinearTerms = curvatureLinearTerms[1:]
+        adjustedValues = adjustedValues[1:]
+        linearTerms = linearTerms[1:]
 
-        if plotDebug:
+        if plotDebug and plotFunction is not None:
 
-            plotCurvatures(self, np.asarray(adjustedPositions, dtype=float), np.asarray(adjustedCurvatures, dtype=float), np.asarray(curvatureLinearTerms, dtype=float))
+            plotFunction(self, np.asarray(adjustedPositions, dtype=float), np.asarray(adjustedValues, dtype=float), np.asarray(linearTerms, dtype=float)
+)
 
-        self.curvatures = pd.DataFrame({"Curvature [1/m]": adjustedCurvatures, "Curvature linear term [1/m^2]": curvatureLinearTerms}, index=adjustedPositions)
+        return pd.DataFrame(
+            {
+                valueColumn: adjustedValues,
+                linearTermColumn: linearTerms
+            },
+            index=adjustedPositions
+        )
+
+
+    def updateGradientsToTrainLength(self, trainLength):
+
+        self.gradients = self.updateTrackAttributeToTrainLength(self.gradients, trainLength)
+
+
+    def updateCurvaturesToTrainLength(self, trainLength):
+
+        self.curvatures = self.updateTrackAttributeToTrainLength(self.curvatures, trainLength)
 
 
 if __name__ == '__main__':

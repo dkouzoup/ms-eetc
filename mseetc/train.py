@@ -117,7 +117,7 @@ class Train():
             tunnel_data = data["tunnel resistance"] # additive aerodynamic tunnel drag as dict per tunnel cross section
 
             cross_section_unit = tunnel_data["units"]["cross section"] # tunnel cross section [m^2]
-            resistance_unit = tunnel_data["units"]["coefficient"] # resistance coefficient [kg/m]
+            resistance_unit = tunnel_data["units"]["coefficient"] # resistance coefficient [N/(m/s)^2]
 
             self.tunnelCoefficients = {
                 convertUnit(cross_section, cross_section_unit): convertUnit(
@@ -290,8 +290,8 @@ class TrainModel():
 
         rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared  # [N/kg]
         gradientResistance = g*(1/rho)*(gradient+gradientLinearTerm*position)  # [N/kg]
-        curvatureResistance = (1/rho)*(5.07 * (curvature+curvatureLinearTerm*position))  # [N/kg]
-        tunnelResistance = tunnelFactor * velocitySquared  # [N/kg]
+        curvatureResistance = (1/rho)*(5.07*(curvature+curvatureLinearTerm*position))  # [N/kg]
+        tunnelResistance = tunnelFactor*velocitySquared  # [N/kg]
 
         acceleration = traction + (pnBrake if withPnBrake else 0) - rollingResistance - gradientResistance - curvatureResistance - tunnelResistance  # [m/s^2]
 

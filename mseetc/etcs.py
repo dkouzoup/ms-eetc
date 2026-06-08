@@ -465,48 +465,6 @@ class EtcsBrakingCurveCalculator:
         plt.show()
 
 
-# def computeStepApproximation(curve, step=50):
-#
-#     positions = curve.index.to_numpy(dtype=float)
-#     velocities = curve["Velocity [m/s]"].to_numpy(dtype=float)
-#
-#     samplePositions = np.arange(positions[1], positions[-1], step)
-#     sampleVelocities = np.interp(samplePositions, positions, velocities)
-#
-#     approximation = pd.DataFrame(
-#         {"Velocity [m/s]": sampleVelocities},
-#         index=samplePositions,
-#     )
-#
-#     approximation.index.name = "Position [m]"
-#
-#     return approximation
-#
-#
-# def plotApproximation(approximation, curve, name):
-#
-#     curveStyles = getCurveStyles()
-#
-#     fig, ax = plt.subplots(figsize=(16, 8))
-#
-#     style = {}
-#
-#     if curveStyles is not None and name in curveStyles:
-#         style = curveStyles[name]
-#
-#     ax.plot(curve.index.values / 1000, curve["Velocity [m/s]"] * 3.6, label=name, **style)
-#     ax.step(approximation.index.values / 1000, approximation["Velocity [m/s]"] * 3.6, label="Step Approxmiation")
-#
-#     ax.set_title("ETCS Braking Curves")
-#     ax.set_xlabel("Position [km]")
-#     ax.set_ylabel("Velocity [km/h]")
-#     ax.grid(True, which="both", linestyle="--", alpha=0.5)
-#     ax.legend(loc="upper right")
-#     ax.figure.tight_layout()
-#
-#     plt.show()
-
-
 if __name__ == '__main__':
 
     # Convention:
@@ -547,6 +505,3 @@ if __name__ == '__main__':
     curve_set = calculator.computeTarget(target)
 
     calculator.plotCurves(curve_set, target)
-
-    # approximation = computeStepApproximation(curves["P"])
-    # plotApproximation(approximation, curves["P"], "P")
