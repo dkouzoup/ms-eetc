@@ -6,7 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mseetc.utils import checkTTOBenchVersion, convertUnit
+from mseetc.utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints, plotSpeedLimits, plotGradients, \
+    plotCurvatures
+
+plotDebug = False
 
 def importTuples(tuples, xLabel, yLabels):
     """
@@ -88,14 +91,14 @@ def computeAltitude(gradients, length, altitudeStart=0):
     return df
 
 
-def computeDiscretizationPoints(track, numIntervals):
+def computeDiscretizationPoints(track, numIntervals, opts):
     """
     Compute the space discretization points based on track characteristics and horizon length.
     """
 
     df1 = track.mergeDataFrames()
 
-    pos = np.linspace(0, track.length, numIntervals + 1 - (len(df1) - 1))
+    pos = pickEquallySpacedPoints(0, track.length, numIntervals, df1.index.to_numpy(dtype=float))
 
     df2 = pd.DataFrame({'position [m]':pos}).set_index('position [m]')
     df3 = df2.join(df1, how='outer').ffill()
@@ -104,7 +107,94 @@ def computeDiscretizationPoints(track, numIntervals):
 
         raise ValueError("Wrong number of computed discretization intervals!")
 
+    adaptConstantTrackAttributesToNewShootingNodes(df3, numIntervals)
+
+    if opts.pwcLengthDependentTrackAttributes:
+
+        makePwcLengthDependentTrackAttibutes(df3)
+
     return df3
+
+
+def adaptConstantTrackAttributesToNewShootingNodes(df, numIntervals):
+    '''
+    Adapt gradient and curvature values to the current shooting nodes.
+
+    For piecewise linear profiles, the constant term at each node is updated using the linear term from the previous interval.
+
+    Example:
+        Gradient at 0 m is 10 permil and the linear term is 0.01 permil/m.
+        At a new shooting node at 100 m, the gradient becomes:
+
+            10 + 100 * 0.01 = 11 permil
+
+        Without a linear term, the value would remain 10 permil.
+    '''
+
+    if "Gradient linear term [permil/m]" in df.columns:
+
+        positions = df.index.to_numpy(dtype=float)
+        grads = [df["Gradient [permil]"].iloc[0]]
+
+        for idx in range(1, numIntervals + 1):
+
+            if np.isclose(df["Gradient [permil]"].iloc[idx - 1], df["Gradient [permil]"].iloc[idx]):
+
+                grads.append(grads[-1] + (positions[idx] - positions[idx - 1]) * df["Gradient linear term [permil/m]"].iloc[idx - 1])
+
+            else:
+
+                grads.append(df["Gradient [permil]"].iloc[idx])
+
+        df["Gradient [permil]"] = grads
+
+    else:
+
+        df["Gradient linear term [permil/m]"] = np.zeros(len(df))
+
+
+    if "Curvature linear term [1/m^2]" in df.columns:
+
+        positions = df.index.to_numpy(dtype=float)
+        curvs = [df["Curvature [1/m]"].iloc[0]]
+
+        for idx in range(1, numIntervals + 1):
+
+            if np.isclose(df["Curvature [1/m]"].iloc[idx - 1], df["Curvature [1/m]"].iloc[idx]):
+
+                curvs.append(curvs[-1] + (positions[idx] - positions[idx - 1]) * df["Curvature linear term [1/m^2]"].iloc[idx - 1])
+
+            else:
+
+                curvs.append(df["Curvature [1/m]"].iloc[idx])
+
+        df["Curvature [1/m]"] = curvs
+
+    else:
+
+        df["Curvature linear term [1/m^2]"] = np.zeros(len(df))
+
+
+def makePwcLengthDependentTrackAttibutes(df):
+
+    positions = df.index.to_numpy(dtype=float)
+
+    g_pwl = df["Gradient [permil]"].to_numpy(dtype=float)
+    g_linear = df["Gradient linear term [permil/m]"].to_numpy(dtype=float)
+
+    c_pwl = df["Curvature [1/m]"].to_numpy(dtype=float)
+    c_linear = df["Curvature linear term [1/m^2]"].to_numpy(dtype=float)
+
+    ds = positions[1:] - positions[:-1]
+
+    g_pwc = g_pwl[:-1] + 0.5 * g_linear[:-1] * ds
+    c_pwc = c_pwl[:-1] + 0.5 * c_linear[:-1] * ds
+
+    df["Gradient [permil]"] = np.r_[g_pwc, g_pwc[-1]]
+    df["Curvature [1/m]"] = np.r_[c_pwc, c_pwc[-1]]
+
+    df["Gradient linear term [permil/m]"] = np.zeros(len(df))
+    df["Curvature linear term [1/m^2]"] = np.zeros(len(df))
 
 
 class Track():
@@ -132,7 +222,7 @@ class Track():
 
             data = json.load(file)
 
-        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3'])
+        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3', '1.4'])
 
         # read data
         self.length = convertUnit(data['stops']['values'][-1], data['stops']['unit'])
@@ -148,6 +238,11 @@ class Track():
                                    data['curvatures']['units']['radius at start'] if 'curvatures' in data else "m",
                                    data['curvatures']['units']['radius at end'] if 'curvatures' in data else "m",
                                    config['clothoidSamplingInterval'] if 'clothoidSamplingInterval' in config else None)
+
+        self.importTunnelTuples(data['tunnels']['values'] if 'tunnels' in data else [(0.0, 0.0, "infinity")],
+                                data['tunnels']['units']['length'] if 'tunnels' in data else 'm',
+                                data['tunnels']['units']['cross section'] if 'tunnels' in data else 'm^2')
+
 
         numStops = len(data['stops']['values'])
         indxDeparture = config['from'] if 'from' in config else 0
@@ -193,6 +288,11 @@ class Track():
         return True if self.curvatures.shape[0] > 0 and checkDataFrame(self.curvatures, self.length) else False
 
 
+    def crossSectionsOk(self):
+
+        return True if self.crossSections.shape[0] > 0 and checkDataFrame(self.crossSections, self.length) else False
+
+
     def checkFields(self):
 
         if not self.lengthOk():
@@ -214,6 +314,10 @@ class Track():
         if not self.curvaturesOk():
 
             raise ValueError("Issue with track curvatures!")
+
+        if not self.crossSectionsOk():
+
+            raise ValueError("Issue with tunnel cross sections!")
 
 
     def importGradientTuples(self, tuples, unit='permil'):
@@ -263,6 +367,7 @@ class Track():
         tuples = self.sampleClothoid(tuples, clothoidSamplingInterval)
 
         self.curvatures = importTuples(tuples, 'Position [m]', ['Curvature [1/m]'])
+        self.curvatures["Curvature [1/m]"] = self.curvatures["Curvature [1/m]"].abs()
 
         checkDataFrame(self.curvatures, self.length)
 
@@ -348,6 +453,46 @@ class Track():
         return result
 
 
+    def importTunnelTuples(self, tuples, unitLength='m', unitCrossSection='m^2'):
+
+        if not self.lengthOk():
+
+            raise ValueError("Cannot import tunnels without a valid track length!")
+
+        if unitLength not in {'m', 'km'} or unitCrossSection not in {'m^2'}:
+
+            raise ValueError("Specified tunnel units not supported!")
+
+        tuples = [(p, convertUnit(l, unitLength), convertUnit(c, unitCrossSection)) for p,l,c in tuples]
+        self.crossSections = importTuples(tuples, 'Position [m]', ['Length [m]', 'CrossSection [m^2]'])
+
+
+        # get end of tunnel positions and assign them a cross section of inf
+        positions = self.crossSections.index.astype(float)
+        tunnelLengths = self.crossSections["Length [m]"].astype(float)
+
+        endOfTunnelPositions = positions + tunnelLengths
+
+        # a tunnel may change its cross section, therefore some end of tunnel positions need to be removed
+        endOfTunnelPositions = [
+            e for e in endOfTunnelPositions
+            if not any(abs((p - e)) < 0.1 for p in positions)
+        ]
+
+        nonTunnelSections_df = pd.DataFrame({"Length [m]": 0.0, "CrossSection [m^2]": float("inf")}, index=endOfTunnelPositions)
+        nonTunnelSections_df.index.name = self.crossSections.index.name
+        self.crossSections = pd.concat([self.crossSections, nonTunnelSections_df]).sort_index()
+
+        if positions[0] != 0.0:
+            first_row = {"Position [m]": 0.0, "Length [m]": 0.0, "CrossSection [m^2]": float("inf")}
+            self.crossSections.loc[0] = first_row
+            self.crossSections = self.crossSections.sort_index()
+
+        self.crossSections.drop(columns=["Length [m]"], inplace=True)
+
+        checkDataFrame(self.crossSections, self.length)
+
+
     def reverse(self):
         # switch to opposite trip
 
@@ -368,6 +513,7 @@ class Track():
         self.gradients = -flipData(self.gradients)
         self.speedLimits = flipData(self.speedLimits)
         self.curvatures = -flipData(self.curvatures)
+        self.crossSections = flipData(self.crossSections)
 
         self.title = self.title + ' (reversed)'
 
@@ -380,7 +526,8 @@ class Track():
         """
 
         joinedGradientsAndSpeedLimits = self.gradients.join(self.speedLimits, how='outer').fillna(method='ffill')
-        return self.curvatures.join(joinedGradientsAndSpeedLimits, how='outer').fillna(method='ffill')
+        joined = self.curvatures.join(joinedGradientsAndSpeedLimits, how='outer').fillna(method='ffill')
+        return self.crossSections.join(joined, how='outer').fillna(method='ffill')
 
     def print(self):
         """
@@ -448,6 +595,151 @@ class Track():
         self.speedLimits = crop(self.speedLimits)
         self.gradients = crop(self.gradients)
         self.curvatures = crop(self.curvatures)
+        self.crossSections = crop(self.crossSections)
+
+
+    def updateTrainLengthDependentValues(self, train):
+
+        self.updateSpeedLimitsToTrainLength(train.length)
+        self.updateGradientsToTrainLength(train.length)
+        self.updateCurvaturesToTrainLength(train.length)
+
+
+    def updateSpeedLimitsToTrainLength(self, trainLength):
+
+        v = self.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
+        pos = self.speedLimits.index.to_numpy(dtype=float)
+
+        if len(pos) > 1:
+
+            pos_adj = []
+            v_adj = []
+
+            for i in range(len(pos)):
+                new_pos = pos[i]
+
+                # Delay speed increases by train length
+                if i > 0 and v[i] > v[i - 1]:
+                    new_pos += trainLength
+
+                # Skip points outside the track
+                if new_pos >= self.length:
+                    continue
+
+                # Remove previous points that are now after this point
+                while pos_adj and pos_adj[-1] > new_pos:
+                    pos_adj.pop()
+                    v_adj.pop()
+
+                pos_adj.append(new_pos)
+                v_adj.append(v[i])
+
+            if plotDebug:
+
+                plotSpeedLimits(self, np.asarray(pos_adj, dtype=float), np.asarray(v_adj, dtype=float))
+
+            self.speedLimits = pd.DataFrame(
+                {"Speed limit [m/s]": v_adj},
+                index=pos_adj,
+            )
+
+
+    def updateTrackAttributeToTrainLength(self, df, trainLength):
+        """
+        Convert pointwise track attribute changes into train-length-dependent piecewise linear values.
+
+        A step at position s does not affect the whole train at once. Instead, its
+        effect is spread over one train length, from s to s + trainLength.
+        """
+
+        if "Gradient [permil]" in df.columns:
+
+            valueColumn = "Gradient [permil]"
+            linearTermColumn = "Gradient linear term [permil/m]"
+            plotFunction = plotGradients
+
+        elif "Curvature [1/m]" in df.columns:
+
+            valueColumn = "Curvature [1/m]"
+            linearTermColumn = "Curvature linear term [1/m^2]"
+            plotFunction = plotCurvatures
+
+        else:
+
+            raise ValueError("Unknown track attribute DataFrame!")
+
+        values = df[valueColumn].to_numpy(dtype=float)
+        positions = df.index.to_numpy(dtype=float)
+
+        if len(positions) <= 1:
+
+            return df
+
+        # Assume the train starts before the track with a flat and straight track.
+        values = np.r_[0.0, values]
+        positions = np.r_[-trainLength, positions]
+
+        # Each original step is spread linearly over one train length assuming uniform mass.
+        # The first point has no previous value, so its slope contribution is zero.
+        jumpSlopes = np.r_[0.0, (values[1:] - values[:-1]) / trainLength]
+
+        # New breakpoints occur both when the front of the train reaches a step and when the rear of the train has passed it.
+        adjustedPositions = np.sort(np.unique(np.r_[positions, positions + trainLength]))
+        adjustedPositions = adjustedPositions[adjustedPositions < self.length]
+
+        adjustedValues = [0.0]
+        linearTerms = [0.0]
+
+        epsilon = 1e-3
+
+        for idx in range(1, len(adjustedPositions)):
+
+            currentPosition = adjustedPositions[idx]
+            previousPosition = adjustedPositions[idx - 1]
+
+            intervalLength = currentPosition - previousPosition
+
+            # Continue the previous linear value to the current position.
+            currentValue = adjustedValues[-1] + intervalLength * linearTerms[-1]
+
+            # Active jumps are those currently within one train length behind the train front.
+            activeJumpMask = (
+                    (currentPosition - trainLength + epsilon < positions)
+                    & (positions < currentPosition + epsilon)
+            )
+
+            currentLinearTerm = np.sum(jumpSlopes[activeJumpMask])
+
+            adjustedValues.append(currentValue)
+            linearTerms.append(currentLinearTerm)
+
+        # Remove artificial point at -trainLength.
+        adjustedPositions = adjustedPositions[1:]
+        adjustedValues = adjustedValues[1:]
+        linearTerms = linearTerms[1:]
+
+        if plotDebug and plotFunction is not None:
+
+            plotFunction(self, np.asarray(adjustedPositions, dtype=float), np.asarray(adjustedValues, dtype=float), np.asarray(linearTerms, dtype=float)
+)
+
+        return pd.DataFrame(
+            {
+                valueColumn: adjustedValues,
+                linearTermColumn: linearTerms
+            },
+            index=adjustedPositions
+        )
+
+
+    def updateGradientsToTrainLength(self, trainLength):
+
+        self.gradients = self.updateTrackAttributeToTrainLength(self.gradients, trainLength)
+
+
+    def updateCurvaturesToTrainLength(self, trainLength):
+
+        self.curvatures = self.updateTrackAttributeToTrainLength(self.curvatures, trainLength)
 
 
 if __name__ == '__main__':

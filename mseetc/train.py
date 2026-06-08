@@ -31,7 +31,7 @@ class Train():
 
             data = json.load(file)
 
-        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3'])
+        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3', '1.4'])
 
         # overwrite json data with config values if applicable
 
@@ -66,6 +66,8 @@ class Train():
             raise ValueError("Redundant fields in train configuration: {}!".format(', '.join(set(config) - usedFields)))
 
         # read data
+        self.length = convertUnit(data['length']['value'], data['length']['unit'])  # train length [m]
+
         self.mass = convertUnit(data['mass']['value'], data['mass']['unit'])  # train mass [kg]
 
         self.rho = convertUnit(data['rho']['value'], data['rho']['unit'])  # rotating-mass factor [-]
@@ -110,10 +112,33 @@ class Train():
             self.etaTraction = convertUnit(data['efficiency traction']['value'], data['efficiency traction']['unit'])
             self.etaRgBrake = convertUnit(data['efficiency reg brake']['value'], data['efficiency reg brake']['unit'])
 
+        if "tunnel resistance" in data:
+
+            tunnel_data = data["tunnel resistance"] # additive aerodynamic tunnel drag as dict per tunnel cross section
+
+            cross_section_unit = tunnel_data["units"]["cross section"] # tunnel cross section [m^2]
+            resistance_unit = tunnel_data["units"]["coefficient"] # resistance coefficient [N/(m/s)^2]
+
+            self.tunnelCoefficients = {
+                convertUnit(cross_section, cross_section_unit): convertUnit(
+                    resistance,
+                    resistance_unit
+                )
+                for cross_section, resistance in tunnel_data["values"]
+            }
+
+        else:
+
+            self.tunnelCoefficients = {}
+
         self.checkFields()
 
 
     def checkFields(self):
+
+        if self.length is None or self.length < 0 or np.isinf(self.length):
+
+            raise ValueError("Train length must be a positive number, not {}!".format(self.length))
 
         if self.mass is None or self.mass < 0 or np.isinf(self.mass):
 
@@ -172,6 +197,17 @@ class Train():
                 raise ValueError("Rolling resistance coefficient {} must be positive, not {}!".format('r'+ii, coef))
 
 
+        for crossSection, coef in self.tunnelCoefficients.items():
+
+            if crossSection is None or crossSection <= 0 or np.isinf(crossSection):
+
+                raise ValueError("Tunnel cross section must be positive, not {}!".format(crossSection))
+
+            if coef is None or coef <= 0 or np.isinf(coef):
+
+                raise ValueError("Tunnel resistance coefficient must be positive, not {}!".format(coef))
+
+
     def exportModel(self):
         "Export train model (ODE and relevant train data)."
 
@@ -226,45 +262,54 @@ class TrainModel():
 
         # states
 
-        time = ca.MX.sym('time')
-        velocitySquared = ca.MX.sym('velocitySquared')
+        time = ca.MX.sym('time')  # [s]
+        velocitySquared = ca.MX.sym('velocitySquared')  # [m^2/s^2]
+        position = ca.MX.sym('position')  # [m]
 
-        x = ca.vertcat(time, velocitySquared)
+        x = ca.vertcat(time, velocitySquared, position)
 
         # controls
 
-        traction = ca.MX.sym('traction')
-        pnBrake = ca.MX.sym('pnBrake')
+        traction = ca.MX.sym('traction')  # [N/kg]
+        pnBrake = ca.MX.sym('pnBrake') # [N/kg]
 
         u = ca.vertcat(traction, pnBrake if withPnBrake else [])
 
         # parameters
 
-        gradient = ca.MX.sym('gradient')
-        curvature = ca.MX.sym('curvature')
+        gradient = ca.MX.sym('gradient')  # [-]
+        gradientLinearTerm = ca.MX.sym('gradientLinearTerm')  # [1/m]
+        curvature = ca.MX.sym('curvature')  # [1/m]
+        curvatureLinearTerm = ca.MX.sym('curvatureLinearTerm')  # [1/m^2]
+        tunnelFactor = ca.MX.sym('tunnelFactor')  # [1/m]
         ds = ca.MX.sym('ds')
 
-        p = ca.vertcat(gradient, curvature, ds)
+        p = ca.vertcat(gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor, ds)
 
         # ODE
 
-        rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared
-        curvatureResistance = ca.if_else(ca.fabs(curvature)<=1/300, g*0.5*ca.fabs(curvature)/(1-30*ca.fabs(curvature)),
-                                         g*0.65*ca.fabs(curvature)/(1-55*ca.fabs(curvature)))
-        acceleration = traction + (pnBrake if withPnBrake else 0) - rollingResistance - g*gradient*(1/rho) - curvatureResistance*(1/rho)
+        rollingResistance = sr0 + sr1*ca.sqrt(velocitySquared) + sr2*velocitySquared  # [N/kg]
+        gradientResistance = g*(1/rho)*(gradient+gradientLinearTerm*position)  # [N/kg]
+        curvatureResistance = (1/rho)*(5.07*(curvature+curvatureLinearTerm*position))  # [N/kg]
+        tunnelResistance = tunnelFactor*velocitySquared  # [N/kg]
+
+        acceleration = traction + (pnBrake if withPnBrake else 0) - rollingResistance - gradientResistance - curvatureResistance - tunnelResistance  # [m/s^2]
+
         timeODE = 1/ca.sqrt(velocitySquared)
         velocityODE = 2*acceleration
+        positionODE = 1
 
         timeODE *= ds
         velocityODE *= ds
+        positionODE *= ds
 
-        fExplicit = ca.vertcat(timeODE, velocityODE)
+        fExplicit = ca.vertcat(timeODE, velocityODE, positionODE)
 
         # model
 
         self.ode = fExplicit
         self.acceleration = acceleration
-        self.accelerationFun = ca.Function('a', [x, u, gradient, curvature], [acceleration])
+        self.accelerationFun = ca.Function('a', [x, u, gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor], [acceleration])
         self.rollingResistance = rollingResistance
         self.parameters = p
         self.controls = u
@@ -295,8 +340,12 @@ class TrainIntegrator():
 
             opts = OptionsRK(optsDict)
 
-            ode = model.ode if opts.numApproxSteps == 0 else model.ode[1]
-            states = model.states if opts.numApproxSteps == 0 else model.states[1]
+            if opts.numApproxSteps == 0:
+                ode = model.ode
+                states = model.states
+            else:
+                ode = ca.vertcat(model.ode[1], model.ode[2])
+                states = ca.vertcat(model.states[1], model.states[2])
 
             self.eval = ca.simpleRK(ca.Function('ode', [states, params], [ode]), opts.numSteps, opts.order)
 
@@ -304,20 +353,22 @@ class TrainIntegrator():
 
             opts = OptionsIRK(optsDict)
 
-            ode = model.ode if opts.numApproxSteps == 0 else model.ode[1]
-            states = model.states if opts.numApproxSteps == 0 else model.states[1]
+            if opts.numApproxSteps == 0:
+                ode = model.ode
+                states = model.states
+            else:
+                ode = ca.vertcat(model.ode[1], model.ode[2])
+                states = ca.vertcat(model.states[1], model.states[2])
 
-            self.eval = ca.simpleIRK(ca.Function('ode', [states, params], [ode]), opts.numSteps, opts.order, opts.collMethod, 'fast_newton', {'max_iter':opts.maxIter, 'jit':opts.jit, 'error_on_fail':False})
+            self.eval = ca.simpleIRK(ca.Function('ode', [states, params], [ode]), opts.numSteps, opts.order, opts.collMethod, 'fast_newton', {'max_iter': opts.maxIter, 'jit': opts.jit, 'error_on_fail': False})
 
         elif solver == 'CVODES':
 
             opts = OptionsCVODES(optsDict)
             opts.numApproxSteps = 0
 
-            states = model.states
-
             t0, tf = 0, 1
-            cvodesFun = ca.integrator('integrator', 'cvodes', {'x':model.states, 'p':params, 'ode':model.ode}, t0, tf, {'abstol':opts.absTol, 'reltol':opts.relTol})
+            cvodesFun = ca.integrator('integrator', 'cvodes', {'x': model.states, 'p': params, 'ode': model.ode}, t0, tf, {'abstol': opts.absTol, 'reltol': opts.relTol})
 
             self.eval = lambda x, p, dummy: cvodesFun(x0=x, p=p)['xf']
 
@@ -327,24 +378,24 @@ class TrainIntegrator():
 
             evalPoints = [0] + [i/ns for i in range(1, ns+1)]
 
-            b0 = model.states[1]
+            z0 = ca.vertcat(model.states[1], model.states[2])
             p0 = ca.vertcat(model.controls, model.parameters)
-            bf = self.eval(b0, p0, ca.hcat(evalPoints))
+            zf = self.eval(z0, p0, ca.hcat(evalPoints))  # zf[0, idx]: velSq, zf[1, idx]: pos
 
             tApprox = model.states[0]
 
             for idx in range(ns):
 
-                vCurr = ca.sqrt(bf[idx])
-                vNext = ca.sqrt(bf[idx+1])
-                tApprox += 2*model.parameters[2]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
+                vCurr = ca.sqrt(zf[0, idx])
+                vNext = ca.sqrt(zf[0, idx+1])
+                tApprox += 2*model.parameters[-1]*(evalPoints[idx+1]-evalPoints[idx])/(vCurr + vNext)
 
-            eval = ca.vertcat(tApprox, bf[-1])
+            eval = ca.vertcat(tApprox, zf[0, ns], zf[1, ns])
 
             self.eval = ca.Function('xNxt', [model.states, ca.vertcat(model.controls, model.parameters), ca.MX.sym('ds')], [eval])
 
 
-    def solve(self, time, velocitySquared, ds, traction=0, pnBrake=0, gradient=0, curvature=0):
+    def solve(self, time, velocitySquared, ds, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
 
         withPnBrake = self.model.withPnBrake
 
@@ -352,14 +403,15 @@ class TrainIntegrator():
 
             raise ValueError("Cannot define value for pneumatic braking when this brake is deactivated!")
 
-        x0 = ca.vertcat(time, velocitySquared)
+        x0 = ca.vertcat(time, velocitySquared, position)
         u0 = ca.vertcat(traction, pnBrake if withPnBrake else [])
-        p0 = ca.vertcat(gradient, curvature, ds)
+        p0 = ca.vertcat(gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor, ds)
         x1 = self.eval(x0, ca.vertcat(u0, p0), 1)
 
         out = {}
         out['time'] = x1[0]
         out['velSquared'] = x1[1]
+        out['position'] = x1[2]
 
         return out
 
@@ -371,16 +423,18 @@ class TrainIntegrator():
 
         mdl = self.model
         vel = ca.MX.sym('v')
+        pos = ca.MX.sym('pos')
 
         velDot = ca.substitute(mdl.acceleration, mdl.states[1], vel**2)
+        velDot = ca.substitute(velDot, mdl.states[2], pos)
 
         energyTrDot = lossesTrFun(mdl.controls[0]*totalMass, vel)/totalMass  # tractive energy
         energyBrDot = lossesRgbFun(mdl.controls[0]*totalMass, vel)/totalMass  # braking energy
 
         dt = ca.MX.sym('dt')
-        x = ca.vertcat(vel, ca.MX.sym('eTr'), ca.MX.sym('eBr'))
-        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], dt)
-        xdot = ca.vertcat(velDot, energyTrDot, energyBrDot)
+        x = ca.vertcat(vel, pos, ca.MX.sym('eTr'), ca.MX.sym('eBr'))
+        p = ca.vertcat(mdl.controls, mdl.parameters[0], mdl.parameters[1], mdl.parameters[2], mdl.parameters[3], mdl.parameters[4], dt)
+        xdot = ca.vertcat(velDot, vel, energyTrDot, energyBrDot)
 
         if solver == 'RK':
 
@@ -402,13 +456,13 @@ class TrainIntegrator():
             raise ValueError("Unknown solver!")
 
 
-    def calcLosses(self, velocity, dt, traction=0, pnBrake=0, gradient=0, curvature=0):
+    def calcLosses(self, velocity, dt, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
 
         mdl = self.model
 
-        out = self.lossesIntegrator(ca.vertcat(velocity, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, curvature), dt)
+        out = self.lossesIntegrator(ca.vertcat(velocity, position, 0, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor), dt)
 
-        lossesTr, lossesRgb = out[1], out[2]
+        lossesTr, lossesRgb = out[2], out[3]
 
         return lossesTr, lossesRgb
 
@@ -418,11 +472,12 @@ class TrainIntegrator():
         mdl = self.model
 
         bDot = mdl.ode[1]
-        eDot = mdl.rollingResistance*mdl.parameters[2]
+        sDot = mdl.ode[2]
+        eDot = mdl.rollingResistance*mdl.parameters[-1]
 
-        x = ca.vertcat(mdl.states[1], ca.MX.sym('e'))
+        x = ca.vertcat(mdl.states[1], mdl.states[2], ca.MX.sym('e'))
         p = ca.vertcat(mdl.controls, mdl.parameters)
-        xdot = ca.vertcat(bDot, eDot)
+        xdot = ca.vertcat(bDot, sDot, eDot)
 
         if solver == 'RK':
 
@@ -442,14 +497,14 @@ class TrainIntegrator():
             raise ValueError("Unknown solver!")
 
 
-    def calcRollingResistance(self, velocity, ds, traction=0, pnBrake=0, gradient=0, curvature=0):
+    def calcRollingResistance(self, velocity, ds, position=0, traction=0, pnBrake=0, gradient=0, gradientLinearTerm=0, curvature=0, curvatureLinearTerm=0, tunnelFactor=0):
 
         mdl = self.model
 
-        out = self.rollingResistanceIntegrator(ca.vertcat(velocity**2, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [], gradient,
-                                                                                      curvature, ds), 1)
+        out = self.rollingResistanceIntegrator(ca.vertcat(velocity**2, position, 0), ca.vertcat(traction, pnBrake if mdl.withPnBrake else [],
+                                                                                      gradient, gradientLinearTerm, curvature, curvatureLinearTerm, tunnelFactor, ds), 1)
 
-        losses = out[1]
+        losses = out[2]
 
         return losses, ca.sqrt(out[0])
 
@@ -548,6 +603,6 @@ if __name__ == '__main__':
     trainSpecs = Train(config={'id':'NL_intercity_VIRM6'})
     integrator = TrainIntegrator(trainSpecs.exportModel(), 'RK', optsDict={'numApproxSteps':2})
 
-    solution = integrator.solve(t0, v0**2, ds, f0, gradient=gd, curvature=cr)
+    solution = integrator.solve(t0, v0**2, ds, traction=f0, gradient=gd, curvature=cr)
 
     print(solution)

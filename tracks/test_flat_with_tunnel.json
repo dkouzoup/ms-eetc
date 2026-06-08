@@ -1,0 +1,45 @@
+{
+    "metadata": {
+        "id": "test_flat_with_tunnel",
+        "created by": "Roland Staerk",
+        "library version": "TTOBench v1.4",
+        "license": "BSD 2-Clause License"
+    },
+    "altitude": {
+        "unit": "m",
+        "value": 0
+    },
+    "stops": {
+        "unit": "m",
+        "values": [
+            0.0,
+            30000.0
+        ]
+    },
+    "speed limits": {
+        "units": {
+            "position": "m",
+            "velocity": "km/h"
+        },
+        "values": [
+            [
+                0.0,
+                160
+            ]
+        ]
+    },
+    "tunnels": {
+        "units": {
+            "position": "m",
+            "length": "m",
+            "cross section": "m^2"
+        },
+        "values": [
+            [
+                1000.0,
+                26000.0,
+                24.0
+            ]
+        ]
+    }
+}

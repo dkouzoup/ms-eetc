@@ -1,0 +1,96 @@
+{
+    "metadata": {
+        "id": "CH_Stadler_FLIRT_TPF",
+        "created by": "Dimitris Kouzoupis",
+        "library version": "TTOBench v1.4",
+        "license": "BSD 2-Clause License"
+    },
+    "num seats": {
+        "unit": "-",
+        "value":167
+    },
+    "num coaches": {
+        "unit": "-",
+        "value": 4
+    },
+    "length": {
+        "unit": "m",
+        "value": 58.6
+    },
+    "mass": {
+        "unit": "kg",
+        "value": 122000.0
+    },
+    "rho": {
+        "unit": "%",
+        "value": 10
+    },
+    "max traction power": {
+        "unit": "kW",
+        "value": 2600.0
+    },
+    "max reg braking power": {
+        "unit": "kW",
+        "value": 2600.0
+    },
+    "max traction force": {
+        "unit": "kN",
+        "value": 200.0
+    },
+    "max reg braking force": {
+        "unit": "kN",
+        "value": 200.0
+    },
+    "max pn braking force": {
+        "unit": "kN",
+        "value": 1220.0
+    },
+    "max acceleration": {
+        "unit": "m/s^2",
+        "value": 1.1
+    },
+    "max deceleration": {
+        "unit": "m/s^2",
+        "value": 1.1
+    },
+    "max speed": {
+        "unit": "km/h",
+        "value": 160
+    },
+    "rolling resistance r0": {
+        "unit": "kN",
+        "value": 2.37888
+    },
+    "rolling resistance r1": {
+        "unit": "kN/(km/h)",
+        "value": 0.01698165
+    },
+    "rolling resistance r2": {
+        "unit": "kN/(km/h)^2",
+        "value": 0.00093264
+    },
+    "efficiency traction": {
+        "unit": "%",
+        "value": 90.0
+    },
+    "efficiency reg brake": {
+        "unit": "%",
+        "value": 90.0
+    },
+    "tunnel resistance": {
+        "units": {
+            "cross section": "m^2",
+            "coefficient": "kN/(km/h)^2"
+        },
+        "values": [
+            [
+                24,
+                0.0011698
+            ],
+            [
+                40,
+                0.0005579
+            ]
+        ]
+    }
+}

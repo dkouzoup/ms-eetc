@@ -7,6 +7,9 @@ import casadi as ca
 from types import MethodType
 from distutils.spawn import find_executable
 
+from matplotlib import pyplot as plt
+
+
 def var(tag, dim=None):
     "Wrapper to create symbolic variables in casadi."
 
@@ -369,7 +372,7 @@ def convertUnit(value, unit):
     Convert from any known unit to internally used unit.
     """
 
-    if unit in {'m', 'm/s', 'permil', 'kg', 'W', 'N', 'm/s^2', '-', 'N/(m/s)', 'N/(m/s)^2', 'kg/m'}:
+    if unit in {'m', 'm/s', 'm^2', 'permil', 'kg', 'W', 'N', 'm/s^2', '-', 'N/(m/s)', 'N/(m/s)^2', 'kg/m'}:
 
         valueOut = value
 
@@ -477,6 +480,152 @@ def latexify():
         latexFound = False
 
     return latexFound
+
+
+def computeTunnelFactor(cross_section, train, opts):
+
+    if cross_section == float("inf"):
+
+        return 0 # no tunnel
+
+    total_mass = train.mass * train.rho
+    tunnelCoefficients = train.tunnelCoefficients
+
+    if not tunnelCoefficients:
+        raise ValueError("Tunnel cross section was specified, but train has no tunnel resistance data.")
+
+    availableCrossSections = list(tunnelCoefficients.keys())
+
+    if opts.chooseClosestTunnelCrossSection:
+
+        closestCrossSection = min(availableCrossSections, key=lambda cs: abs(cs - cross_section))
+        tunnelCoefficient = tunnelCoefficients[closestCrossSection]
+
+    else:
+
+        if cross_section not in tunnelCoefficients:
+
+            raise ValueError(
+                "Tunnel resistance coefficient for cross section {} m^2 is not available. "
+                "Available cross sections are: {}. "
+                "Set chooseClosestTunnelCrossSection=True to use the closest available value.".format(
+                    cross_section,
+                    availableCrossSections
+                )
+            )
+
+        tunnelCoefficient = tunnelCoefficients[cross_section]
+
+
+    return tunnelCoefficient/total_mass
+
+
+def pickEquallySpacedPoints(startPoint, endPoint, numIntervals, requiredPoints):
+
+    np.random.seed(42)
+
+    if len(requiredPoints) > numIntervals + 1:
+
+        raise ValueError(f"Too many required points ({len(requiredPoints)}) for N.")
+
+    num_of_remaining_points = numIntervals + 1 - len(requiredPoints)
+    m = 1 # number of points to oversample
+
+    while True:
+
+        cand = np.linspace(startPoint, endPoint, num_of_remaining_points + m + 2)[1:-1]  # oversample to avoid overlaps
+        cand = np.round(cand, 0)
+        out = np.unique(np.r_[requiredPoints, cand])
+        cand_without_required = out[~np.isin(out, requiredPoints)]
+
+        if len(cand_without_required) >= num_of_remaining_points:
+
+            picked_points = np.random.choice(cand_without_required, size=num_of_remaining_points, replace=False)
+            return picked_points
+
+        m *= 2
+
+
+def plotSpeedLimits(track, pos_adj, v_adj):
+
+    v_limits = track.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
+    pos_v_limits = track.speedLimits.index.to_numpy(dtype=float)
+
+    v_limits = np.append(v_limits, v_limits[-1])
+    pos_v_limits = np.append(pos_v_limits, track.length)
+
+    v_adj = np.append(v_adj, v_adj[-1])
+    pos_adj = np.append(pos_adj, track.length)
+
+    fig, ax = plt.subplots(figsize=(16, 8))
+
+    ax.step(pos_v_limits / 1000, v_limits  * 3.6, where='post', label="piecewise constant speed limit")
+    ax.step(pos_adj/1000, v_adj * 3.6, where='post', linestyle="--", label="train length adjusted speed limit")
+
+    ax.set_title("Speed Limits")
+    ax.set_xlabel('Position [km]')
+    ax.set_ylabel('Velocity [km/h]')
+    ax.grid(True, which='both', linestyle='--', alpha=0.5)
+    ax.legend(loc="upper right")
+    ax.set_xlim(0, track.length / 1000)
+    ax.figure.tight_layout()
+
+    plt.show()
+
+
+def plotGradients(track, pos_adj, g_adj, g_linear):
+
+    x = track.gradients.index.to_numpy(dtype=float)
+    g = track.gradients["Gradient [permil]"].to_numpy(dtype=float)
+
+    x = np.append(x, track.length)
+    g = np.append(g, g[-1])
+
+    pos_adj = np.append(pos_adj, track.length)
+    g_adj = np.append(g_adj, g_adj[-1])
+    g_linear = np.append(g_linear, g_linear[-1])
+
+    fig, ax = plt.subplots(figsize=(16, 8))
+
+    ax.step(x/1000, g, where='post', label="piecewise constant gradients")
+    ax.plot(pos_adj / 1000, g_adj, linestyle="--", label="train length averaged gradients")
+
+    g_computed = np.r_[g_adj[0], g_adj[:-1] + g_linear[:-1] * (pos_adj[1:] - pos_adj[:-1])]
+    ax.scatter(pos_adj / 1000, g_computed, marker="o", label="computed gradients")
+
+    ax.set_title("Gradients")
+    ax.set_xlabel("Position [km]")
+    ax.set_ylabel("Gradient [‰]")
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right")
+    ax.set_xlim(0, track.length / 1000)
+    ax.figure.tight_layout()
+
+    plt.show()
+
+
+def plotCurvatures(track, pos_adj, c_adj, c_linear):
+
+    x = track.curvatures.index.to_numpy(dtype=float)
+    c = track.curvatures["Curvature [1/m]"].to_numpy(dtype=float)
+
+    fig, ax = plt.subplots(figsize=(16, 8))
+
+    ax.step(x/1000, c, where='post', label="piecewise constant curvatures")
+    ax.plot(pos_adj / 1000, c_adj, linestyle="--", label="train length averaged curvatures")
+
+    c_computed = np.r_[c_adj[0], c_adj[:-1] + c_linear[:-1] * (pos_adj[1:] - pos_adj[:-1])]
+    ax.scatter(pos_adj / 1000, c_computed, marker="o", label="computed curvatures")
+
+    ax.set_title("Curvatures")
+    ax.set_xlabel("Position [km]")
+    ax.set_ylabel("Curvature [1/m]")
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right")
+    ax.set_xlim(0, track.length / 1000)
+    ax.figure.tight_layout()
+
+    plt.show()
 
 
 if __name__ == '__main__':
