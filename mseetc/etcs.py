@@ -109,25 +109,39 @@ class BrakingTarget:
     permittedVelocity: float  # [m/s]
     targetVelocity: float  # [m/s]
 
+    # EoA: End of authority
     @property
     def EoA(self):
         return self.position
 
+    # SvL: Supervised location
     @property
     def SvL(self):
         return self.position + self.overlap
 
 
 class EtcsBrakingCurveCalculator:
+    """
+    Conventions
+    -----------
+    - Position increases in the train running direction.
+    - Braking accelerations are stored as negative values.
+    - Gradient is positive for uphill and negative for downhill.
+    - A_gradient = g * gradient / 1000.
+    - Curves are computed backwards from the target position.
+    """
 
     def __init__(self, trainBrakingData, track, distancePre=3000, distancePost=1000):
 
         self.trainBrakingData = trainBrakingData
         self.track = track
 
+        # Compute the braking curve using fixed time steps of length dt.
         self.dt = 0.1  # [s]
-        self.distancePre = distancePre
-        self.distancePost = distancePost
+
+        # speed decrease is plotted from BrakingTarget.position - distancePre until BrakingTarget.position + distancePost
+        self.distancePre = distancePre  # [m]
+        self.distancePost = distancePost  # [m]
 
         # ETCS Constants
         self.T_warning = 2.0  # [s]
@@ -161,7 +175,7 @@ class EtcsBrakingCurveCalculator:
             raise ValueError("targetVelocity must be lower than permittedVelocity.")
 
 
-    def compute_A_brake_safe(self):
+    def computeABrakeSafe(self):
 
         trainBrakingData = self.trainBrakingData
 
@@ -187,7 +201,7 @@ class EtcsBrakingCurveCalculator:
         }
 
 
-    def compute_A_gradient(self, currentPosition):
+    def computeAGradient(self, currentPosition):
 
         positions = self.track.gradients.index.values
         gradients = self.track.gradients["Gradient [permil]"].values
@@ -197,35 +211,46 @@ class EtcsBrakingCurveCalculator:
 
         if idx == 0:
 
-            return 0  # [start of track has been exceeded]
+            # If the backward-computed curve extends before the first known gradient point, assume flat track.
+            return 0
 
         gradient = gradients[idx]
         return 9.81 * gradient * 0.001
 
 
-    def computeBrakingCurve(self, brakingProfile, target_position, permittedVelocity, targetVelocity):
+    def computeBrakingCurve(self, brakingProfile, targetPosition, permittedVelocity, targetVelocity):
+        """
+        Compute a braking curve backwards from a target position and target velocity.
 
-        max_velocity = permittedVelocity * 1.4
+        The braking profile is defined by velocity thresholds and corresponding braking decelerations.
+        The curve is integrated backwards in fixed time steps until the maximum relevant velocity is reached.
+        """
 
-        positions = [target_position]
+        maxVelocity = permittedVelocity * 1.4
+
+        positions = [targetPosition]
         velocities = [targetVelocity]
 
-        threshold_velocities = list(brakingProfile["velocity [m/s]"])
-        braking_values = list(brakingProfile["value [m/s^2]"])
+        thresholdVelocities = list(brakingProfile["velocity [m/s]"])
+        brakingValues = list(brakingProfile["value [m/s^2]"])
 
-        threshold_velocities.append(200)  # basically inf velocity
+        openEndedVelocityThreshold  = 200  # [m/s], practical upper bound for open-ended last interval of the braking profile, basically inf velocity for a train
+        thresholdVelocities.append(openEndedVelocityThreshold )
 
-        for idx in range(len(threshold_velocities) - 1):
+        for idx in range(len(thresholdVelocities) - 1):
 
-            if targetVelocity > threshold_velocities[idx + 1]:
+            upperThreshold = thresholdVelocities[idx + 1]
+
+            # The curve starts at targetVelocity, so lower velocity ranges are not relevant.
+            if targetVelocity > upperThreshold:
+
                 continue
 
-            threshold_velocity = threshold_velocities[idx + 1]
-            A_brake = braking_values[idx]
+            A_brake = brakingValues[idx]
 
-            while True:
+            while velocities[-1] < upperThreshold and velocities[-1] < maxVelocity:
 
-                A_gradient = self.compute_A_gradient(positions[-1])
+                A_gradient = self.computeAGradient(positions[-1])
 
                 v_old = velocities[-1]
                 v_new = v_old - (A_brake - A_gradient) * self.dt
@@ -234,10 +259,8 @@ class EtcsBrakingCurveCalculator:
                 positions.append(x_new)
                 velocities.append(v_new)
 
-                if v_new >= threshold_velocity or v_new >= max_velocity:
-                    break
+            if velocities[-1] >= maxVelocity:
 
-            if velocities[-1] >= max_velocity:
                 break
 
         curve = pd.DataFrame(
@@ -250,7 +273,7 @@ class EtcsBrakingCurveCalculator:
         return curve
 
 
-    def compute_EBI_curve(self, EBD_curve, targetVelocity):
+    def computeEBICurve(self, EBD_curve, targetVelocity):
 
         trainBrakingData = self.trainBrakingData
 
@@ -277,6 +300,10 @@ class EtcsBrakingCurveCalculator:
             V_est = max(V_est, 0.0)
 
             if V_est < targetVelocity:
+
+                # Stop once the estimated velocity drops below the target velocity.
+                # Add the target velocity as the final point, using a small position offset as a simplified position.
+                # This is only used to terminate the plotted EBI curve at targetVelocity.
                 velocitiesEBI.append(targetVelocity)
                 positionsEBI.append(positionsEBI[-1] + 1)
 
@@ -287,8 +314,7 @@ class EtcsBrakingCurveCalculator:
             V_delta_0 = V_est * v_uncertainty
             V_delta1 = A_est1 * T_traction
             V_delta2 = A_est2 * T_berem
-            D_bec = T_traction * (V_est + V_delta_0 + 0.5 * V_delta1) + T_berem * (
-                        V_est + V_delta_0 + V_delta1 + 0.5 * V_delta2)
+            D_bec = T_traction * (V_est + V_delta_0 + 0.5 * V_delta1) + T_berem * (V_est + V_delta_0 + V_delta1 + 0.5 * V_delta2)
             positionsEBI.append(pos - D_bec)
 
         EBI_curve = pd.DataFrame(
@@ -301,7 +327,7 @@ class EtcsBrakingCurveCalculator:
         return EBI_curve
 
 
-    def compute_SBI_curve(self, SBI1_curve, SBI2_curve):
+    def computeSBICurve(self, SBI1_curve, SBI2_curve):
 
         positionsSBI1 = SBI1_curve.index.to_numpy()
         velocitiesSBI1 = SBI1_curve["Velocity [m/s]"].to_numpy()
@@ -320,6 +346,8 @@ class EtcsBrakingCurveCalculator:
         velocitiesSBI1_interpol = np.interp(positionsSBI, positionsSBI1, velocitiesSBI1)
         velocitiesSBI2_interpol = np.interp(positionsSBI, positionsSBI2, velocitiesSBI2)
 
+        # At each position, take the lower speed of SBI1 and SBI2.
+        # This gives the more restrictive plotted SBI curve.
         velocitiesSBI = np.minimum(velocitiesSBI1_interpol, velocitiesSBI2_interpol)
 
         SBI_curve = pd.DataFrame(
@@ -332,7 +360,7 @@ class EtcsBrakingCurveCalculator:
         return SBI_curve
 
 
-    def postPreProcessCurves(self, curves, target):
+    def processCurvesBeforeTarget(self, curves, target):
 
         permittedVelocity = target.permittedVelocity
         start_position = target.position - self.distancePre
@@ -363,7 +391,7 @@ class EtcsBrakingCurveCalculator:
 
         return curves
 
-    def postPostProcessCurves(self, curves, target):
+    def processCurvcesAfterTarget(self, curves, target):
 
         targetVelocity = target.targetVelocity
         end_position = target.position + self.distancePost
@@ -399,14 +427,14 @@ class EtcsBrakingCurveCalculator:
         self.validateInput(target)
         trainBrakingData = self.trainBrakingData
 
-        df_A_brake_safe = self.compute_A_brake_safe()
+        ABrakeSafeProfile = self.computeABrakeSafe()
         T_indication = max(0.8 * trainBrakingData["T_bs [s]"], 5) + self.T_driver
 
         curves = {}
 
-        curves["EBD"] = self.computeBrakingCurve(df_A_brake_safe, target.SvL, target.permittedVelocity, target.targetVelocity)
+        curves["EBD"] = self.computeBrakingCurve(ABrakeSafeProfile, target.SvL, target.permittedVelocity, target.targetVelocity)
 
-        curves["EBI"] = self.compute_EBI_curve(curves["EBD"], target.targetVelocity)
+        curves["EBI"] = self.computeEBICurve(curves["EBD"], target.targetVelocity)
 
         curves["SBI2"] = shiftCurveByTime(curves["EBI"], trainBrakingData["T_bs2 [s]"])
 
@@ -414,7 +442,7 @@ class EtcsBrakingCurveCalculator:
 
         curves["SBI1"] = shiftCurveByTime(curves["SBD"], trainBrakingData["T_bs1 [s]"])
 
-        curves["SBI"] = self.compute_SBI_curve(curves["SBI1"], curves["SBI2"])
+        curves["SBI"] = self.computeSBICurve(curves["SBI1"], curves["SBI2"])
 
         curves["W"] = shiftCurveByTime(curves["SBI"], self.T_warning)
 
@@ -422,11 +450,11 @@ class EtcsBrakingCurveCalculator:
 
         curves["I"] = shiftCurveByTime(curves["P"], T_indication)
 
-        curves = self.postPreProcessCurves(curves, target)
+        curves = self.processCurvesBeforeTarget(curves, target)
 
         if target.targetVelocity > 0:
 
-            curves = self.postPostProcessCurves(curves, target)
+            curves = self.processCurvcesAfterTarget(curves, target)
 
         return curves
 
@@ -466,10 +494,6 @@ class EtcsBrakingCurveCalculator:
 
 
 if __name__ == '__main__':
-
-    # Convention:
-    # Braking accelerations are stored as negative values.
-    # Gradient acceleration is positive for uphill and negative for downhill.
 
     trainBrakingData = {
         "A_brake_emergency [m/s^2]": {
