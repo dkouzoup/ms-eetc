@@ -3,7 +3,6 @@ from matplotlib import pyplot as plt
 
 from mseetc.efficiency import totalLossesFunction
 from mseetc.etcs import getEtcsSpeedLimits
-from mseetc.journey import Journey
 from mseetc.ocp import casadiSolver
 
 
@@ -68,43 +67,45 @@ if __name__ == '__main__':
 
     printStats(df, stats, solver, train)
 
-    # ETCS-adjusted speed profile
-    track.setEtcsSpeedLimits(train)
-    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True, 'withEtcsBrakingCurves': True}
+    df.to_pickle("../data/StGallenWilTrajectory01.pkl")
 
-    solverEtcs = casadiSolver(train, track, journey, opts)
-    dfEtcs, statsEtcs = solverEtcs.solve(journey)
-
-    printStats(dfEtcs, statsEtcs, solverEtcs, train)
-
-
-    ### Plot Trajectory
-
-    fig, ax = plt.subplots(figsize=(16, 8))
-
-    x = track.speedLimits.index.to_numpy(dtype=float)
-    v = track.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
-    x_plot = np.append(x, track.length)
-    v_plot = np.append(v, v[-1])
-
-    etcsLimitsPositions, etcsLimitsVelocities = getEtcsSpeedLimits(train, track)
-
-    ax.step(x_plot/1000, v_plot*3.6, where="post", color="black", linestyle="-", label="Track Speed Limit")
-    ax.plot(etcsLimitsPositions/1000, etcsLimitsVelocities*3.6, color="red", linestyle="-", label="ETCS Speed Limit")
-
-    ax.plot(df["Position [m]"] / 1000, df["Velocity [m/s]"] * 3.6, linestyle="--", label="non-adjusted speed profile")
-    ax.plot(dfEtcs["Position [m]"] / 1000, dfEtcs["Velocity [m/s]"] * 3.6, linestyle="--", label="ETCS-adjusted speed profile")
-
-    ax.set_title("Speed Profile Comparison")
-    ax.set_xlabel("Position [km]")
-    ax.set_ylabel("Velocity [km/h]")
-    ax.grid(True, which="both", linestyle="--", alpha=0.5)
-    ax.legend(loc="upper right")
-    ax.set_xlim(0, df["Position [m]"].max() / 1000)
-    ax.figure.tight_layout()
-
-    plt.show()
-
-    costRatio = (statsEtcs["Cost"] - stats["Cost"]) / stats["Cost"]
-
-    print(f"Cost increase with ETCS: {costRatio:.2%}")
+    # # ETCS-adjusted speed profile
+    # track.setEtcsSpeedLimits(train)
+    # opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True, 'withEtcsBrakingCurves': True}
+    #
+    # solverEtcs = casadiSolver(train, track, journey, opts)
+    # dfEtcs, statsEtcs = solverEtcs.solve(journey)
+    #
+    # printStats(dfEtcs, statsEtcs, solverEtcs, train)
+    #
+    #
+    # ### Plot Trajectory
+    #
+    # fig, ax = plt.subplots(figsize=(16, 8))
+    #
+    # x = track.speedLimits.index.to_numpy(dtype=float)
+    # v = track.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
+    # x_plot = np.append(x, track.length)
+    # v_plot = np.append(v, v[-1])
+    #
+    # etcsLimitsPositions, etcsLimitsVelocities = getEtcsSpeedLimits(train, track)
+    #
+    # ax.step(x_plot/1000, v_plot*3.6, where="post", color="black", linestyle="-", label="Track Speed Limit")
+    # ax.plot(etcsLimitsPositions/1000, etcsLimitsVelocities*3.6, color="red", linestyle="-", label="ETCS Speed Limit")
+    #
+    # ax.plot(df["Position [m]"] / 1000, df["Velocity [m/s]"] * 3.6, linestyle="--", label="non-adjusted speed profile")
+    # ax.plot(dfEtcs["Position [m]"] / 1000, dfEtcs["Velocity [m/s]"] * 3.6, linestyle="--", label="ETCS-adjusted speed profile")
+    #
+    # ax.set_title("Speed Profile Comparison")
+    # ax.set_xlabel("Position [km]")
+    # ax.set_ylabel("Velocity [km/h]")
+    # ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    # ax.legend(loc="upper right")
+    # ax.set_xlim(0, df["Position [m]"].max() / 1000)
+    # ax.figure.tight_layout()
+    #
+    # plt.show()
+    #
+    # costRatio = (statsEtcs["Cost"] - stats["Cost"]) / stats["Cost"]
+    #
+    # print(f"Cost increase with ETCS: {costRatio:.2%}")

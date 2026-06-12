@@ -106,6 +106,7 @@ def computeDiscretizationPoints(track, numIntervals, opts, timingPointPositions)
         brakingPoints = getRelevantEtcsBrakingPositions(track)
         requiredPoints = np.append(requiredPoints, brakingPoints)
 
+    requiredPoints = np.unique(requiredPoints)
     pos = pickEquallySpacedPoints(0, track.length, numIntervals, requiredPoints)
 
     df2 = pd.DataFrame({'position [m]':pos}).set_index('position [m]')
