@@ -1,0 +1,65 @@
+{
+    "metadata": {
+        "id": "test_two_radii",
+        "created by": "Roland Staerk",
+        "library version": "TTOBench v1.4",
+        "license": "BSD 2-Clause License"
+    },
+    "altitude": {
+        "unit": "m",
+        "value": 0
+    },
+    "stops": {
+        "unit": "m",
+        "values": [
+            0.0,
+            12000.0
+        ]
+    },
+    "speed limits": {
+        "units": {
+            "position": "m",
+            "velocity": "km/h"
+        },
+        "values": [
+            [
+                0.0,
+                79.2
+            ]
+        ]
+    },
+    "curvatures": {
+        "units": {
+            "position": "m",
+            "radius at start": "m",
+            "radius at end": "m"
+        },
+        "values": [
+            [
+                0.0,
+                "infinity",
+                "infinity"
+            ],
+            [
+                1000.0,
+                300.0,
+                300.0
+            ],
+            [
+                2000.0,
+                "infinity",
+                "infinity"
+            ],
+            [
+                3000.0,
+                -300.0,
+                -300.0
+            ],
+            [
+                4000.0,
+                "infinity",
+                "infinity"
+            ]
+        ]
+    }
+}

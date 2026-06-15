@@ -1,0 +1,59 @@
+{
+    "metadata": {
+        "id": "test_one_hill",
+        "created by": "Roland Staerk",
+        "library version": "TTOBench v1.4",
+        "license": "BSD 2-Clause License"
+    },
+    "altitude": {
+        "unit": "m",
+        "value": 0
+    },
+    "stops": {
+        "unit": "m",
+        "values": [
+            0.0,
+            12000.0
+        ]
+    },
+    "speed limits": {
+        "units": {
+            "position": "m",
+            "velocity": "km/h"
+        },
+        "values": [
+            [
+                0.0,
+                79.2
+            ]
+        ]
+    },
+    "gradients": {
+        "units": {
+            "position": "m",
+            "slope": "permil"
+        },
+        "values": [
+            [
+                0.0,
+                0.0
+            ],
+            [
+                1000.0,
+                20.0
+            ],
+            [
+                2000.0,
+                0.0
+            ],
+            [
+                3000.0,
+                -20.0
+            ],
+            [
+                4000.0,
+                0.0
+            ]
+        ]
+    }
+}
