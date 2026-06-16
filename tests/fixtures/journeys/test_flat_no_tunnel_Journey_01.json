@@ -1,10 +1,10 @@
 {
     "metadata": {
-      "id": "CH_StGallen_Wil_Journey_01",
+      "id": "test_flat_no_tunnel_Journey_01",
       "created by": "Roland Staerk",
       "library version": "TTOBench v1.5",
       "license": "BSD 2-Clause License",
-      "associated track": "CH_StGallen_Wil"
+      "associated track": "test_flat_no_tunnel"
     },
     "timing points": {
        "units": {
@@ -23,9 +23,9 @@
             0
           ],
           [
-            20000,
-            700,
-            700,
+            28000,
+            695,
+            695,
             0,
             0
           ]

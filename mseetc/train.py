@@ -70,7 +70,7 @@ class Train():
 
         self.mass = convertUnit(data['mass']['value'], data['mass']['unit'])  # train mass [kg]
 
-        self.rho = convertUnit(data['rho']['value'], data['rho']['unit'])  # rotating-mass factor [-]
+        self.rho = convertUnit(data['rho']['value'], data['rho']['unit']) if 'max traction force' in data else 1  # rotating-mass factor [-]
 
         if self.rho < 1:
 

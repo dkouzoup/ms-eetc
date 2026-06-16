@@ -79,7 +79,7 @@ if __name__ == '__main__':
     opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':5}, 'energyOptimal':True}
 
     solver = casadiSolver(train, track, journey, opts)
-    df, stats = solver.solve(journey)
+    df, stats = solver.solve()
 
     printStats(df, stats, solver, train)
 
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':5}, 'energyOptimal':True, 'withEtcsBrakingCurves': True}
 
     solverEtcs = casadiSolver(train, track, journey, opts)
-    dfEtcs, statsEtcs = solverEtcs.solve(journey)
+    dfEtcs, statsEtcs = solverEtcs.solve()
 
     printStats(dfEtcs, statsEtcs, solverEtcs, train)
 

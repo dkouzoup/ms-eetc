@@ -356,6 +356,7 @@ class casadiSolver():
         self.withRgBrake = withRgBrake
         self.withPnBrake = withPnBrake
         self.train = train
+        self.journey = journey
         self.energyOptimal = opts.energyOptimal
         self.scalingFactorObjective = scalingFactorObjective
         self.opts = opts
@@ -366,12 +367,12 @@ class casadiSolver():
         self.ubg = ca.vcat(ubg)
 
 
-    def solve(self, journey):
+    def solve(self):
 
-        initialTime = journey.initialTime
-        terminalTime = journey.terminalTime
-        initialVelocity = journey.initialVelocity
-        terminalVelocity = journey.terminalVelocity
+        initialTime = self.journey.initialTime
+        terminalTime = self.journey.terminalTime
+        initialVelocity = self.journey.initialVelocity
+        terminalVelocity = self.journey.terminalVelocity
 
 
         # check boundary conditions on time

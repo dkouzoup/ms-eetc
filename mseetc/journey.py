@@ -35,7 +35,7 @@ class Journey():
         # read data
         self.id = data['metadata']['id']
 
-        self.associatedTrackID = data['associated track id']['id']
+        self.associatedTrackID = data['metadata']['associated track']
 
         self.timingPoints = self.readTimingPoints(data['timing points'])
 
@@ -44,7 +44,6 @@ class Journey():
         self.computeStartAndEndPoints()
 
         self.computeInitialAndTerminalStates()
-
 
     def readTimingPoints(self, timingPoints):
 
@@ -59,12 +58,13 @@ class Journey():
         }
 
         for point in timingPoints['values']:
+            pos, tMin, tMax, vMin, vMax = point
 
-            values["Position [m]"].append(convertUnit(point['position'], units['position']))
-            values["Lower time constraint [s]"].append(self.convertConstraint(point['lower time constraint'], units['lower time constraint']))
-            values["Upper time constraint [s]"].append(self.convertConstraint(point['upper time constraint'], units['upper time constraint']))
-            values["Lower speed constraint [m/s]"].append(self.convertConstraint(point['lower speed constraint'], units['lower speed constraint']))
-            values["Upper speed constraint [m/s]"].append(self.convertConstraint(point['upper speed constraint'], units['upper speed constraint']))
+            values["Position [m]"].append(convertUnit(pos, units['position']))
+            values["Lower time constraint [s]"].append(self.convertConstraint(tMin, units['lower time constraint']))
+            values["Upper time constraint [s]"].append(self.convertConstraint(tMax, units['upper time constraint']))
+            values["Lower speed constraint [m/s]"].append(self.convertConstraint(vMin, units['lower speed constraint']))
+            values["Upper speed constraint [m/s]"].append(self.convertConstraint(vMax, units['upper speed constraint']))
 
         df = pd.DataFrame(values)
         df = df.set_index("Position [m]")
@@ -79,6 +79,11 @@ class Journey():
             return None
 
         return convertUnit(value, unit)
+
+
+    def isSet(self, value):
+
+        return value is not None and not pd.isna(value)
 
 
     def checkFields(self):
@@ -115,15 +120,15 @@ class Journey():
             vMin = point["Lower speed constraint [m/s]"]
             vMax = point["Upper speed constraint [m/s]"]
 
-            if tMin is not None and tMax is not None and tMin > tMax:
+            if self.isSet(tMin) and self.isSet(tMax) and tMin > tMax:
 
                 raise ValueError("Lower time constraint must be smaller than or equal to upper time constraint!")
 
-            if vMin is not None and vMax is not None and vMin > vMax:
+            if self.isSet(vMin) and self.isSet(vMax) and vMin > vMax:
 
                 raise ValueError("Lower speed constraint must be smaller than or equal to upper speed constraint!")
 
-            if any(value is not None and (value < 0 or np.isinf(value)) for value in [tMin, tMax, vMin, vMax]):
+            if any(self.isSet(value) and (value < 0 or np.isinf(value)) for value in [tMin, tMax, vMin, vMax]):
 
                 raise ValueError("Timing point constraints must be positive finite numbers or None!")
 
