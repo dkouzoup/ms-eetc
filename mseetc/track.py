@@ -399,6 +399,8 @@ class Track():
 
         checkDataFrame(self.gradients, self.length)
 
+        self.gradientsTrainLengthIndependent = self.gradients.copy()
+
 
     def importSpeedLimitTuples(self, tuples, unitPosition='m', unitVelocity='km/h'):
 
@@ -669,6 +671,7 @@ class Track():
         self.gradients = crop(self.gradients)
         self.curvatures = crop(self.curvatures)
         self.crossSections = crop(self.crossSections)
+        self.gradientsTrainLengthIndependent = crop(self.gradientsTrainLengthIndependent)
 
 
     def setEtcsSpeedLimits(self, train):
