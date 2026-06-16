@@ -126,14 +126,18 @@ class casadiSolver():
 
         # track parameters
 
+        if opts.withEtcsBrakingCurves:
+
+            track.setEtcsSpeedLimits(train)
+
         timingPointPositions = journey.timingPoints.index.to_numpy(dtype=float)[1:-1] - journey.positionStart
         self.points = computeDiscretizationPoints(track, numIntervals, opts, timingPointPositions)
         self.steps = np.diff(self.points.index)
 
         if opts.withEtcsBrakingCurves:
 
-            velocities = np.interp(self.points.index.to_numpy(), track.etcsPositions, track.etcsVelocities)
-            self.points["Speed limit [m/s]"] = np.maximum(velocities, velocityMin)
+            etcsVelocities = np.interp(self.points.index.to_numpy(), track.etcsPositions, track.etcsVelocities)
+            self.points["Speed limit [m/s]"] = np.maximum(etcsVelocities, velocityMin)
 
         # real-time parameters
 

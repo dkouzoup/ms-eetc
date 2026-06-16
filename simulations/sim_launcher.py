@@ -83,8 +83,8 @@ if __name__ == '__main__':
 
     printStats(df, stats, solver, train)
 
+
     # ETCS-adjusted speed profile
-    track.setEtcsSpeedLimits(train)
     opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':5}, 'energyOptimal':True, 'withEtcsBrakingCurves': True}
 
     solverEtcs = casadiSolver(train, track, journey, opts)
@@ -105,10 +105,8 @@ if __name__ == '__main__':
     x_plot = np.append(x, track.length)
     v_plot = np.append(v, v[-1])
 
-    etcsLimitsPositions, etcsLimitsVelocities = getEtcsSpeedLimits(train, track)
-
     ax.step(x_plot/1000, v_plot*3.6, where="post", color="black", linestyle="-", label="Track Speed Limit")
-    ax.plot(etcsLimitsPositions/1000, etcsLimitsVelocities*3.6, color="red", linestyle="-", label="ETCS Speed Limit")
+    ax.plot(track.etcsPositions/1000, track.etcsVelocities*3.6, color="red", linestyle="-", label="ETCS Speed Limit")
 
     ax.plot(df["Position [m]"] / 1000, df["Velocity [m/s]"] * 3.6, linestyle="--", label="non-adjusted speed profile")
     ax.plot(dfEtcs["Position [m]"] / 1000, dfEtcs["Velocity [m/s]"] * 3.6, linestyle="--", label="ETCS-adjusted speed profile")

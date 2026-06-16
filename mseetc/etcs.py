@@ -609,9 +609,8 @@ if __name__ == '__main__':
 
     train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='../trains')
 
-    # track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='../tracks')
-    track = Track(config={'id': 'test_ETCS_non_flat_track'}, pathJSON='../tests/fixtures//tracks')
-    # track.updateTrainLengthDependentValues(train)
+    track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='../tracks')
+    track.updateTrainLengthDependentValues(train)
 
     target = BrakingTarget(
             position=5000,

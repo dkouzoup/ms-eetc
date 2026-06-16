@@ -91,14 +91,13 @@ class TestETCS(unittest.TestCase):
         calculator = EtcsBrakingCurveCalculator(train, track, distancePre=5000, distancePost=1000)
         _, interventionPoints = calculator.computeTarget(target)
 
-        tol = 33
+        tol = 1
 
         expectedInterventionPoints = {
             "I": 2139.76,
             "P": 1789.76,
             "W": 1711.98,
-            "SBI": 1634.21,
-            "EBI": 1491.69,
+            "SBI": 1634.21
         }
 
         for pointName, expectedValue in expectedInterventionPoints.items():
@@ -116,4 +115,25 @@ class TestETCS(unittest.TestCase):
                     f"allowed tolerance: ±{tol:.2f} m."
                 )
             )
+
+            tol = 8.5
+
+            expectedInterventionPoints = {
+                "EBI": 1491.69
+            }
+
+            for pointName, expectedValue in expectedInterventionPoints.items():
+                actualValue = interventionPoints[pointName]
+
+                self.assertAlmostEqual(
+                    actualValue,
+                    expectedValue,
+                    delta=tol,
+                    msg=(
+                        f"Intervention point {pointName} is not within the expected tolerance. "
+                        f"Expected: {expectedValue:.2f} m, "
+                        f"actual: {actualValue:.2f} m, "
+                        f"allowed tolerance: ±{tol:.2f} m."
+                    )
+                )
 
