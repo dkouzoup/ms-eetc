@@ -126,14 +126,18 @@ class casadiSolver():
 
         # track parameters
 
+        if opts.withEtcsBrakingCurves:
+
+            track.setEtcsSpeedLimits(train)
+
         timingPointPositions = journey.timingPoints.index.to_numpy(dtype=float)[1:-1] - journey.positionStart
         self.points = computeDiscretizationPoints(track, numIntervals, opts, timingPointPositions)
         self.steps = np.diff(self.points.index)
 
         if opts.withEtcsBrakingCurves:
 
-            velocities = np.interp(self.points.index.to_numpy(), track.etcsPositions, track.etcsVelocities)
-            self.points["Speed limit [m/s]"] = velocities
+            etcsVelocities = np.interp(self.points.index.to_numpy(), track.etcsPositions, track.etcsVelocities)
+            self.points["Speed limit [m/s]"] = np.maximum(etcsVelocities, velocityMin)
 
         # real-time parameters
 
@@ -352,6 +356,7 @@ class casadiSolver():
         self.withRgBrake = withRgBrake
         self.withPnBrake = withPnBrake
         self.train = train
+        self.journey = journey
         self.energyOptimal = opts.energyOptimal
         self.scalingFactorObjective = scalingFactorObjective
         self.opts = opts
@@ -362,12 +367,12 @@ class casadiSolver():
         self.ubg = ca.vcat(ubg)
 
 
-    def solve(self, journey):
+    def solve(self):
 
-        initialTime = journey.initialTime
-        terminalTime = journey.terminalTime
-        initialVelocity = journey.initialVelocity
-        terminalVelocity = journey.terminalVelocity
+        initialTime = self.journey.initialTime
+        terminalTime = self.journey.terminalTime
+        initialVelocity = self.journey.initialVelocity
+        terminalVelocity = self.journey.terminalVelocity
 
 
         # check boundary conditions on time

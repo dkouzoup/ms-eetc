@@ -1,5 +1,6 @@
 import unittest
 
+from mseetc.journey import Journey
 from mseetc.ocp import casadiSolver
 from mseetc.track import Track
 from mseetc.train import Train
@@ -12,29 +13,29 @@ class TestTunnelResistance(unittest.TestCase):
         26 km long small tunnel with cross section of 24 m^2 on a track of 28 km results in significant higher energy consumption.
         '''
 
-        startPosition = 0  # [m]
-        endPosition = 28000  # [m]
-        duration = 28000/(145/3.6)  # [s]
-
         minEnergyRatio = 1.5
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
 
-        trackWithoutTunnel = Track(config={'id': 'test_flat_no_tunnel'}, pathJSON='tracks')
-        trackWithoutTunnel.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
+        trackWithoutTunnel = Track(config={'id': 'test_flat_no_tunnel'}, pathJSON='tests/fixtures/tracks')
+
+        journey = Journey(config={'id': 'test_flat_no_tunnel_Journey_01'}, pathJSON='tests/fixtures/journeys')
+        trackWithoutTunnel.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
         opts = {'numIntervals': 300, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
-        solver = casadiSolver(train, trackWithoutTunnel, opts)
-        dfWithoutTunnel, statsWithoutTunnel = solver.solve(duration)
+        solver = casadiSolver(train, trackWithoutTunnel, journey, opts)
+        dfWithoutTunnel, statsWithoutTunnel = solver.solve()
 
         energyConsumptionWithoutTunnel = statsWithoutTunnel['Cost']
 
-        trackWithTunnel = Track(config={'id': 'test_flat_with_tunnel'}, pathJSON='tracks')
-        trackWithTunnel.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
+        trackWithTunnel = Track(config={'id': 'test_flat_with_tunnel'}, pathJSON='tests/fixtures/tracks')
+
+        journey = Journey(config={'id': 'test_flat_with_tunnel_Journey_01'}, pathJSON='tests/fixtures/journeys')
+        trackWithTunnel.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
         opts = {'numIntervals': 300, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
-        solver = casadiSolver(train, trackWithTunnel, opts)
-        dfWithTunnel, statsWithTunnel = solver.solve(duration)
+        solver = casadiSolver(train, trackWithTunnel, journey, opts)
+        dfWithTunnel, statsWithTunnel = solver.solve()
 
         energyConsumptionWithTunnel = statsWithTunnel['Cost']
 

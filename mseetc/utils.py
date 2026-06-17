@@ -521,32 +521,6 @@ def computeTunnelFactor(cross_section, train, opts):
     return tunnelCoefficient/total_mass
 
 
-def pickEquallySpacedPoints(startPoint, endPoint, numIntervals, requiredPoints):
-
-    np.random.seed(42)
-
-    if len(requiredPoints) > numIntervals + 1:
-
-        raise ValueError(f"Too many required points ({len(requiredPoints)}) for N.")
-
-    num_of_remaining_points = numIntervals + 1 - len(requiredPoints)
-    m = 1 # number of points to oversample
-
-    while True:
-
-        cand = np.linspace(startPoint, endPoint, num_of_remaining_points + m + 2)[1:-1]  # oversample to avoid overlaps
-        cand = np.round(cand, 0)
-        out = np.unique(np.r_[requiredPoints, cand])
-        cand_without_required = out[~np.isin(out, requiredPoints)]
-
-        if len(cand_without_required) >= num_of_remaining_points:
-
-            picked_points = np.random.choice(cand_without_required, size=num_of_remaining_points, replace=False)
-            return np.sort(np.r_[requiredPoints, picked_points])
-
-        m *= 2
-
-
 def plotSpeedLimits(track, pos_adj, v_adj):
 
     v_limits = track.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
@@ -629,20 +603,73 @@ def plotCurvatures(track, pos_adj, c_adj, c_linear):
     plt.show()
 
 
-def getRelevantEtcsBrakingPositions(track):
+def getEquallyDistributedPoints(startPoint, endPoint, numMissingPoints, existingPointsInInterval):
 
-    relevantPositions = []
+    points = np.sort(np.unique(existingPointsInInterval))
+
+    assert startPoint < endPoint
+    assert np.isclose(startPoint, points[0])
+    assert np.isclose(endPoint, points[-1])
+    assert len(points) == len(existingPointsInInterval)
+    assert numMissingPoints >= 0
+
+    additionalPoints = []
+
+    for _ in range(numMissingPoints):
+
+        gaps = np.diff(points)
+        gapIdx = np.argmax(gaps)
+
+        leftPoint = points[gapIdx]
+        rightPoint = points[gapIdx + 1]
+
+        newPoint = np.round((leftPoint + rightPoint) / 2, 0)
+
+        if not leftPoint < newPoint < rightPoint or np.any(np.isclose(newPoint, points)):
+
+            raise ValueError("Could not insert another unique rounded point.")
+
+        points = np.sort(np.append(points, newPoint))
+        additionalPoints.append(newPoint)
+
+    return additionalPoints
+
+
+def introduceSufficientShootingNodesForETCSBrakingCurves(track, existingPoints):
+
+    minPointsPer100Meters = 4
+
+    additionalPoints = []
+
+    startPoints, endPoints = [], []
 
     positions = track.etcsPositions
     velocities = track.etcsVelocities
 
-    for idx in range(1, len(positions)):
+    for idx in range(1, len(positions)-1):
 
-        if velocities[idx - 2] > velocities[idx - 1] == velocities[idx]:
+        if np.isclose(velocities[idx-1], velocities[idx]) and velocities[idx] > velocities[idx+1]:
 
-            relevantPositions.append(positions[idx])
+            startPoints.append(positions[idx])
 
-    return relevantPositions
+        if np.isclose(velocities[idx], velocities[idx+1]) and velocities[idx-1] > velocities[idx]:
+
+            endPoints.append(positions[idx])
+
+    for startPoint, endPoint in zip(startPoints, endPoints):
+
+        numRequiredPoints = int(np.ceil(minPointsPer100Meters / 100 * (endPoint - startPoint)))
+        mask = (existingPoints >= startPoint) & (existingPoints <= endPoint)
+        existingPointsInInterval = existingPoints[mask]
+        existingPointsInInterval = np.unique(np.append(existingPointsInInterval,  [startPoint, endPoint]))
+        additionalPoints.extend([startPoint, endPoint])
+        numMissingPoints = max(numRequiredPoints - len(existingPointsInInterval), 0)
+
+        if numMissingPoints > 0:
+
+            additionalPoints.extend(getEquallyDistributedPoints(startPoint, endPoint, numMissingPoints, existingPointsInInterval))
+
+    return np.asarray(additionalPoints, dtype=float)
 
 
 def isSet( value):

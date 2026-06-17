@@ -1,5 +1,6 @@
 import unittest
 
+from mseetc.journey import Journey
 from mseetc.ocp import casadiSolver
 from mseetc.track import Track
 from mseetc.train import Train
@@ -17,47 +18,45 @@ class TestGradient(unittest.TestCase):
         differ by a small relative tolerance.
         '''
 
-        startPosition = 0  # [m]
-        endPosition = 5000  # [m]
-        duration = 5000 / (60 / 3.6)  # [s]
-
         tol = 0.1
         numIntervals = 200
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = 600
 
-        track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tracks')
-        track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
+        track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tests/fixtures/tracks')
         track.updateTrainLengthDependentValues(train)
 
+        journey = Journey(config={'id': 'CH_StGallen_Wil_Journey_01'}, pathJSON='tests/fixtures/journeys')
+        track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
+
         opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        df, stats = solver.solve()
 
         energy_RK_Approx = stats['Cost']
 
         opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 0}}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        df, stats = solver.solve()
 
         energy_RK = stats['Cost']
 
         opts = {'numIntervals': numIntervals, 'integrationMethod': 'IRK', 'integrationOptions': {'numApproxSteps': 1}}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        df, stats = solver.solve()
 
         energy_IRK_Approx = stats['Cost']
 
         opts = {'numIntervals': numIntervals, 'integrationMethod': 'IRK', 'integrationOptions': {'numApproxSteps': 0}}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        df, stats = solver.solve()
 
         energy_IRK = stats['Cost']
 
         opts = {'numIntervals': numIntervals, 'integrationMethod': 'CVODES'}
-        solver = casadiSolver(train, track, opts)
-        df, stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        df, stats = solver.solve()
 
         energy_CVODES = stats['Cost']
 

@@ -5,8 +5,6 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-# from mseetc.track import Track
-
 
 def getTrackVelocityAtPositions(speedLimitPositions, speedLimits, positions):
     """
@@ -52,16 +50,16 @@ def getBrakingTargetsFromSpeedLimits(track):
 
 def getEtcsSpeedLimits(train, track, positionStep=20.0):
 
-    calculator = EtcsBrakingCurveCalculator(train, track)
-
     targets, speedLimitPositions, speedLimits = getBrakingTargetsFromSpeedLimits(track)
+
+    calculator = EtcsBrakingCurveCalculator(train, track)
 
     # Compute P curves for all speed decreases
     pCurves = []
 
     for target in targets:
 
-        curveSet = calculator.computeTarget(target)
+        curveSet, _ = calculator.computeTarget(target)
         curveSet["P"].loc[target.position, "Velocity [m/s]"] = target.targetVelocity
         pCurves.append(curveSet["P"])
 
@@ -161,9 +159,12 @@ def addEndPointToCurve(curve, velocity, end_position):
 def trimCurveToMaxVelocity(curve, maxVelocity):
 
     velocities = curve["Velocity [m/s]"].to_numpy(dtype=float)
-    keep_mask = velocities <= maxVelocity
 
-    return curve[keep_mask].copy()
+    keepMask = velocities <= maxVelocity
+    firstKeptIdx = np.where(keepMask)[0][0]
+    keepMask[max(firstKeptIdx - 1, 0)] = True
+
+    return curve[keepMask].copy()
 
 
 def trimCurveFromMinVelocity(curve, minVelocity):
@@ -279,27 +280,22 @@ class EtcsBrakingCurveCalculator:
 
     def computeAGradient(self, currentPosition):
 
-        positions = self.track.gradients.index.to_numpy(dtype=float)
-        gradients = self.track.gradients["Gradient [permil]"].to_numpy(dtype=float)
-
-        if "Gradient linear term [permil/m]" in self.track.gradients.columns:
-
-            gradientsLinearTerm = self.track.gradients["Gradient linear term [permil/m]"].to_numpy(dtype=float)
-
-        else:
-
-            gradientsLinearTerm = np.zeros(len(self.track.gradients))
-
-
-        idx = bisect_right(positions, currentPosition) - 1
-        idx = max(0, min(idx, len(positions) - 1))
+        positions = self.track.gradientsTrainLengthIndependent.index.to_numpy(dtype=float)
+        gradients = self.track.gradientsTrainLengthIndependent["Gradient [permil]"].to_numpy(dtype=float)
 
         # If the backward-computed curve extends before the first known gradient point, assume flat track.
         if currentPosition < positions[0]:
 
             return 0
 
-        gradient = gradients[idx] + gradientsLinearTerm[idx] * (currentPosition - positions[idx])
+        idxFront = bisect_right(positions, currentPosition) - 1
+        idxRear = bisect_right(positions, currentPosition - self.train.length) - 1
+
+        idxFront = max(0, min(idxFront, len(positions) - 1))
+        idxRear = max(0, min(idxRear, len(positions) - 1))
+
+        gradient = np.min(gradients[idxRear:idxFront + 1])
+
         return 9.81 * gradient * 0.001
 
 
@@ -376,7 +372,7 @@ class EtcsBrakingCurveCalculator:
 
         for pos, vel in zip(positionsEBD, velocitiesEBD):
 
-            A_est1 = 0.1  # todo
+            A_est1 = 0.0  # todo
             A_est2 = min(A_est1, 0.4)
 
             V_est = (vel - A_est1 * T_traction - A_est2 * T_berem) / (1 + v_uncertainty)
@@ -547,7 +543,9 @@ class EtcsBrakingCurveCalculator:
 
         curves = self.trimCurves(curves, target)
 
-        return curves
+        interventionPoints = self.computeInterventionPoints(curves, target)
+
+        return curves, interventionPoints
 
 
     def plotCurves(self, curves, target):
@@ -584,6 +582,26 @@ class EtcsBrakingCurveCalculator:
         plt.show()
 
 
+    def computeInterventionPoints(self, curves, target):
+
+        interventionPoints = {}
+
+        for name, curve in curves.items():
+
+            curvePositions = curve.index.to_numpy(dtype=float)
+            curveVelocities = curve["Velocity [m/s]"].to_numpy(dtype=float)
+            interventionPoints[name] = target.position - np.interp(target.permittedVelocity, curveVelocities[::-1], curvePositions[::-1])
+
+        return interventionPoints
+
+
+    def printInterventionPoints(self, interventionPoints):
+
+        for name, value in interventionPoints.items():
+
+            print(name, " point: ", round(value, 2))
+
+
 if __name__ == '__main__':
 
     from mseetc.track import Track
@@ -597,14 +615,16 @@ if __name__ == '__main__':
     target = BrakingTarget(
             position=5000,
             overlap= 100,
-            permittedVelocity=160/3.6,
-            targetVelocity=0/3.6
+            permittedVelocity=140/3.6,
+            targetVelocity=00/3.6
     )
 
-    addConstantVelocitySections = False
+    addConstantVelocitySections = True
 
     calculator = EtcsBrakingCurveCalculator(train, track, distancePre=5000, distancePost=1000)
-    curve_set = calculator.computeTarget(target)
+    curve_set, interventionPoints = calculator.computeTarget(target)
+
+    calculator.printInterventionPoints(interventionPoints)
 
     if addConstantVelocitySections:
 
@@ -614,3 +634,4 @@ if __name__ == '__main__':
             curve_set = calculator.processCurvesAfterTarget(curve_set, target)
 
     calculator.plotCurves(curve_set, target)
+

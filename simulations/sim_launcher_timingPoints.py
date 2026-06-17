@@ -110,7 +110,7 @@ if __name__ == '__main__':
     opts = {'numIntervals':800, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
 
     solver = casadiSolver(train, track, journey, opts)
-    df, stats = solver.solve(journey)
+    df, stats = solver.solve()
 
     printStats(df, stats, solver, train)
 

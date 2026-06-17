@@ -1,5 +1,6 @@
 import unittest
 
+from mseetc.journey import Journey
 from mseetc.ocp import casadiSolver
 from mseetc.track import Track
 from mseetc.train import Train
@@ -16,29 +17,28 @@ class TestSpeedLimit(unittest.TestCase):
         22 m/s after the whole train has passed the speed-increase position.
         '''
 
-        startPosition = 0  # [m]
-        endPosition = 12000  # [m]
-        duration = endPosition/(115/3.6)  # [s]
         speedIncreasePosition = 1000  # [m]
         speedLimitBeforeIncrease = 22  # [m/s]
         speedTolerance = 0.001  # [m/s]
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
 
-        track = Track(config={'id': 'test_one_speed_increase'}, pathJSON='tracks')
-        track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
+        track = Track(config={'id': 'test_one_speed_increase'}, pathJSON='tests/fixtures/tracks')
+
+        journey = Journey(config={'id': 'test_one_speed_increase_Journey_01'}, pathJSON='tests/fixtures/journeys')
+        track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
         opts = {'numIntervals': 300, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
-        solver = casadiSolver(train, track, opts)
-        dfWithoutTrainLength, statsWithoutTrainLength = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        dfWithoutTrainLength, statsWithoutTrainLength = solver.solve()
 
         speedWithoutTrainLengthAfterIncrease = dfWithoutTrainLength[dfWithoutTrainLength['Position [m]'] > speedIncreasePosition].iloc[0]['Velocity [m/s]']
 
         track.updateTrainLengthDependentValues(train)
 
         opts = {'numIntervals': 300, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
-        solver = casadiSolver(train, track, opts)
-        dfWithTrainLength, statsWithTrainLength = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        dfWithTrainLength, statsWithTrainLength = solver.solve()
 
         speedWithTrainLengthAfterIncrease = dfWithTrainLength[dfWithTrainLength['Position [m]'] > speedIncreasePosition].iloc[0]['Velocity [m/s]']
         speedWithTrainLengthAfterTrainPassedIncrease = dfWithTrainLength[dfWithTrainLength['Position [m]'] > (speedIncreasePosition+train.length)].iloc[0]['Velocity [m/s]']
