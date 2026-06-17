@@ -11,13 +11,15 @@ from simulations.sim_launcher import get_power_loss_function
 
 class TrajectoryForceEstimator():
 
-    def __init__(self, df, train, track, optsDict={}, trainLengthDependetValues=False):
+    def __init__(self, df, train, track, optsDict={}, trainLengthDependentValues=False, plotInterpolation=False):
 
         # input checking
         track.checkFields()
         train.checkFields()
-
         self.validateTargetDf(df, track.length)
+
+        self.train = train
+        self.track = track
 
         # targetTrajectory
         self.targetTimes = df.index.to_numpy()
@@ -28,10 +30,9 @@ class TrajectoryForceEstimator():
         self.positionEnd = self.targetPositions[-1]
 
         self.opts = OptionsCasadiSolver(optsDict)
-        velocityMin = self.opts.minimumVelocity
 
         # track
-        if trainLengthDependetValues:
+        if trainLengthDependentValues:
 
             track.updateTrainLengthDependentValues(train)
 
@@ -39,14 +40,18 @@ class TrajectoryForceEstimator():
 
         self.numIntervals = self.opts.numIntervals
         self.points = computeDiscretizationPoints(track, self.numIntervals, self.opts, np.array([], dtype=float))
-        self.steps = np.diff(self.points.index)
 
         self.positionsInterp = self.points.index.to_numpy(dtype=float)
-        targetPositionsRelative = self.targetPositions - self.positionStart
-        self.targetTimesIntep = np.interp(self.positionsInterp, targetPositionsRelative, self.targetTimes)
-        self.targetVelocitiesIntep = np.interp(self.positionsInterp, targetPositionsRelative, self.targetVelocities)
+        self.steps = np.diff(self.positionsInterp)
 
-        self.plotInterpolationComparison()
+        targetPositionsRelative = self.targetPositions - self.positionStart
+
+        self.targetTimesInterpolated = np.interp(self.positionsInterp, targetPositionsRelative, self.targetTimes)
+        self.targetVelocitiesInterpolated = np.interp(self.positionsInterp, targetPositionsRelative, self.targetVelocities)
+
+        if plotInterpolation:
+
+            self.plotInterpolationComparison()
 
         # train
         trainModel = train.exportModel()
@@ -58,21 +63,18 @@ class TrajectoryForceEstimator():
             powerLossesTr, powerLossesRgb = train.powerLossesFuns()
             self.trainIntegrator.initLosses(powerLossesTr, powerLossesRgb, self.totalMass)
 
-        self.train = train
-        self.track = track
-
 
     def plotInterpolationComparison(self):
 
         fig, ax = plt.subplots(figsize=(24, 12))
         ax.plot(self.targetPositions / 1000, self.targetVelocities * 3.6, label="original velocities")
-        ax.plot(self.positionsInterp / 1000, self.targetVelocitiesIntep * 3.6, linestyle="--", label="interpolated velocities")
+        ax.plot(self.positionsInterp / 1000, self.targetVelocitiesInterpolated * 3.6, linestyle="--", label="interpolated velocities")
         ax.set_title("Interpolation Comparison")
         ax.set_xlabel("Position [km]")
         ax.set_ylabel("Velocity [km/h]")
         ax.grid(True, which="both", linestyle="--", alpha=0.5)
         ax.legend(loc="upper right")
-        ax.set_xlim(0, dfTarget["Position [m]"].max() / 1000)
+        ax.set_xlim(self.targetPositions.min() / 1000, self.targetPositions.max() / 1000)
         ax.figure.tight_layout()
 
         plt.show()
@@ -98,9 +100,9 @@ class TrajectoryForceEstimator():
 
         try:
 
-            df.index.to_numpy(dtype=float)
+            times = df.index.to_numpy(dtype=float)
             positions = df["Position [m]"].to_numpy(dtype=float)
-            df["Velocity [m/s]"].to_numpy(dtype=float)
+            velocities = df["Velocity [m/s]"].to_numpy(dtype=float)
 
         except ValueError:
 
@@ -112,6 +114,26 @@ class TrajectoryForceEstimator():
                 "Last trajectory position must not be larger than track length! "
                 "Got {:.3f} m, track length is {:.3f} m.".format(positions[-1], trackLength)
             )
+
+        if len(positions) < 2:
+
+            raise ValueError("Trajectory DataFrame must contain at least two points!")
+
+        if np.any(np.diff(times) <= 0):
+
+            raise ValueError("Trajectory time index must be strictly increasing!")
+
+        if np.any(np.diff(positions) <= 0):
+
+            raise ValueError("Trajectory positions must be strictly increasing!")
+
+        if np.any(velocities < 0):
+
+            raise ValueError("Trajectory velocities must not be negative!")
+
+        if positions[0] < 0:
+
+            raise ValueError("First trajectory position must not be negative!")
 
 
     def estimate(self):
@@ -126,9 +148,13 @@ class TrajectoryForceEstimator():
 
         for i in range(self.numIntervals):
 
-            FelEstimate, timeEstimate, velocityEstimate = self.findForceWithBisection(time, velSq, i)
+            forceElLower = self.train.forceMin / self.totalMass
+            forceElUpper = self.train.forceMax / self.totalMass
+
+            FelEstimate, timeEstimate, velocityEstimate = self.bisection(forceElLower, forceElUpper, time, velSq, i)
+
             estimatedForcesEl.append(FelEstimate)
-            estimatedForcesPnb.append(0)
+            estimatedForcesPnb.append(0) # todo
             integratedTimes.append(timeEstimate)
             integratedVelocities.append(velocityEstimate)
 
@@ -141,7 +167,7 @@ class TrajectoryForceEstimator():
         dfEstimate = pd.DataFrame(index=np.array(integratedTimes, dtype=float))
         dfEstimate.index.name = "Time [s]"
 
-        dfEstimate["Position [m]"] = self.positionsInterp
+        dfEstimate["Position [m]"] = self.positionsInterp + self.positionStart
         dfEstimate["Velocity [m/s]"] = np.array(integratedVelocities, dtype=float)
         dfEstimate["Force (el) [N]"] = np.array(estimatedForcesEl, dtype=float) * self.totalMass
         dfEstimate["Force (pnb) [N]"] = np.array(estimatedForcesPnb, dtype=float) * self.totalMass
@@ -149,30 +175,22 @@ class TrajectoryForceEstimator():
         return dfEstimate
 
 
-    def findForceWithBisection(self, time, velSq, i):
-
-        forceElLower = self.train.forceMin/self.totalMass
-        forceElUpper = self.train.forceMax/self.totalMass
-
-        FelEstimate, timeEstimate, velocityEstimate = self.bisection(forceElLower, forceElUpper, time, velSq, i)
-
-        return FelEstimate, timeEstimate, velocityEstimate
-
-
     def bisection(self, lower, upper, time, velSq, i, tolerance=1e-8, maxIterations=60):
 
-        targetVelocity = self.targetVelocitiesIntep[i + 1]
+        targetVelocity = self.targetVelocitiesInterpolated[i + 1]
 
-        tLower, velocityLower = self.integrateWithFel(lower, time, velSq, i)
-        tUpper, velocityUpper = self.integrateWithFel(upper, time, velSq, i)
+        tLower, velocityLower = self.integrate(lower, 0, time, velSq, i)
+        tUpper, velocityUpper = self.integrate(upper, 0, time, velSq, i)
 
         errorLower = velocityLower - targetVelocity
         errorUpper = velocityUpper - targetVelocity
 
         if abs(errorLower) <= tolerance:
+
             return lower, tLower, velocityLower
 
         if abs(errorUpper) <= tolerance:
+
             return upper, tUpper, velocityUpper
 
         if errorLower * errorUpper > 0:
@@ -180,25 +198,19 @@ class TrajectoryForceEstimator():
             raise ValueError(
                 "Bisection requires a sign change in interval {}! "
                 "Target velocity is {:.6f} m/s, "
-                "Fel={} gives {:.6f} m/s and Fel={} gives {:.6f} m/s.".format(
-                    i,
-                    targetVelocity,
-                    lower,
-                    velocityLower,
-                    upper,
-                    velocityUpper
-                )
+                "Fel={} gives {:.6f} m/s and Fel={} gives {:.6f} m/s.".format(i, targetVelocity, lower, velocityLower, upper, velocityUpper)
             )
 
         for _ in range(maxIterations):
 
             middle = 0.5 * (lower + upper)
 
-            tMiddle, velocityMiddle = self.integrateWithFel(middle, time, velSq, i)
+            tMiddle, velocityMiddle = self.integrate(middle, 0, time, velSq, i)
 
             errorMiddle = velocityMiddle - targetVelocity
 
             if abs(errorMiddle) <= tolerance or abs(upper - lower) <= tolerance:
+
                 return middle, tMiddle, velocityMiddle
 
             if errorLower * errorMiddle <= 0:
@@ -214,8 +226,7 @@ class TrajectoryForceEstimator():
         return middle, tMiddle, velocityMiddle
 
 
-
-    def integrateWithFel(self, Fel, time, velSq, i):
+    def integrate(self, Fel, Fpb, time, velSq, i):
 
         grad = self.points.iloc[i]['Gradient [permil]'] / 1e3
         gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil/m]"] / 1e3
@@ -228,7 +239,7 @@ class TrajectoryForceEstimator():
                                     velocitySquared=velSq,
                                     ds=self.steps[i],
                                     traction=Fel,
-                                    pnBrake=0,
+                                    pnBrake=Fpb,
                                     gradient=grad,
                                     gradientLinearTerm=gradLinearTerm,
                                     curvature=curv,
@@ -261,11 +272,11 @@ def plotVelocityComparison(dfTarget, dfEstimate):
 def plotForceComparison(dfTarget, dfEstimate):
 
     fig, ax = plt.subplots(figsize=(24, 12))
-    ax.step(dfTarget["Position [m]"] / 1000, dfTarget["Force (el) [N]"], where="post", label="original trajectory")
-    ax.step(dfEstimate["Position [m]"] / 1000, dfEstimate["Force (el) [N]"], linestyle="--", where="post", label="estimated trajectory")
+    ax.step(dfTarget["Position [m]"] / 1000, dfTarget["Force (el) [N]"] / 1000, where="post", label="original trajectory")
+    ax.step(dfEstimate["Position [m]"] / 1000, dfEstimate["Force (el) [N]"] / 1000, linestyle="--", where="post", label="estimated trajectory")
     ax.set_title("Estimation Comparison - Force")
     ax.set_xlabel("Position [km]")
-    ax.set_ylabel("Velocity [km/h]")
+    ax.set_ylabel("Force [kN]")
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
     ax.legend(loc="upper right")
     ax.set_xlim(0, dfTarget["Position [m]"].max() / 1000)
@@ -287,9 +298,8 @@ if __name__ == '__main__':
 
     optsDict = {'numIntervals': 600, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
 
-    estimator = TrajectoryForceEstimator(dfTarget, train, track, optsDict=optsDict, trainLengthDependetValues=True)
+    estimator = TrajectoryForceEstimator(dfTarget, train, track, optsDict=optsDict, trainLengthDependentValues=True)
     dfEstimate = estimator.estimate()
 
-    plotVelocityComparison(dfTarget, dfEstimate)
+    plotVelocityComparison(dfTarget, dfEstimate)  # todo: estimation misses last point
     plotForceComparison(dfTarget, dfEstimate)
-
