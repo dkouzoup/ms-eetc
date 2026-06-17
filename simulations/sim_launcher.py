@@ -76,7 +76,7 @@ if __name__ == '__main__':
     track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
     # non-adjusted speed profile
-    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':5}, 'energyOptimal':True}
+    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
 
     solver = casadiSolver(train, track, journey, opts)
     df, stats = solver.solve()
@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
 
     # ETCS-adjusted speed profile
-    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':5}, 'energyOptimal':True, 'withEtcsBrakingCurves': True}
+    opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True, 'withEtcsBrakingCurves': True}
 
     solverEtcs = casadiSolver(train, track, journey, opts)
     dfEtcs, statsEtcs = solverEtcs.solve()
