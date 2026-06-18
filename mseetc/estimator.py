@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
+from mseetc.efficiency import forceToLoad
 from mseetc.ocp import OptionsCasadiSolver
 from mseetc.track import Track, computeDiscretizationPoints
 from mseetc.train import Train, TrainIntegrator
@@ -146,15 +147,25 @@ class TrajectoryForceEstimator():
         integratedTimes = [time]
         integratedVelocities = [np.sqrt(velSq)]
 
+        forceElLower = (self.train.forceMin + self.train.forceMinPn) / self.totalMass
+        forceElUpper = self.train.forceMax / self.totalMass
+
         for i in range(self.numIntervals):
 
-            forceElLower = self.train.forceMin / self.totalMass
-            forceElUpper = self.train.forceMax / self.totalMass
+            forceEstimate, timeEstimate, velocityEstimate = self.bisection(forceElLower, forceElUpper, time, velSq, i)
 
-            FelEstimate, timeEstimate, velocityEstimate = self.bisection(forceElLower, forceElUpper, time, velSq, i)
+            if forceEstimate < self.train.forceMin / self.totalMass:
 
-            estimatedForcesEl.append(FelEstimate)
-            estimatedForcesPnb.append(0) # todo
+                forceElEstimate = self.train.forceMin / self.totalMass
+                forcePnEstimate = forceEstimate - forceElEstimate
+
+            else:
+
+                forceElEstimate = forceEstimate
+                forcePnEstimate = 0
+
+            estimatedForcesEl.append(forceElEstimate)
+            estimatedForcesPnb.append(forcePnEstimate)
             integratedTimes.append(timeEstimate)
             integratedVelocities.append(velocityEstimate)
 
@@ -248,6 +259,16 @@ class TrajectoryForceEstimator():
 
         integratedTime = float(np.asarray(out["time"], dtype=float).squeeze())
         integratedVelocitySquared = float(np.asarray(out["velSquared"], dtype=float).squeeze())
+
+        if np.isnan(integratedTime):
+
+            # too large negative force, train is moving backwards
+            integratedTime = time + self.steps[i] / np.sqrt(velSq)
+
+        if np.isnan(integratedVelocitySquared):
+
+            integratedVelocitySquared = 0
+
         integratedVelocity = np.sqrt(max(integratedVelocitySquared, 0))
 
         return integratedTime, integratedVelocity
@@ -285,6 +306,22 @@ def plotForceComparison(dfTarget, dfEstimate):
     plt.show()
 
 
+def plotTimeCoparison(dfTarget, dfEstimate):
+
+    fig, ax = plt.subplots(figsize=(24, 12))
+    ax.plot(dfTarget["Position [m]"] / 1000, dfTarget.index.to_numpy(), label="original trajectory")
+    ax.plot(dfEstimate["Position [m]"] / 1000, dfEstimate.index.to_numpy(), linestyle="--", label="estimated trajectory")
+    ax.set_title("Estimation Comparison - Time")
+    ax.set_xlabel("Position [km]")
+    ax.set_ylabel("Time [s]")
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right")
+    ax.set_xlim(0, dfTarget["Position [m]"].max() / 1000)
+    ax.figure.tight_layout()
+
+    plt.show()
+
+
 if __name__ == '__main__':
 
     dfTarget = pd.read_pickle("../data/StGallenWilTrajectory01.pkl")
@@ -301,5 +338,6 @@ if __name__ == '__main__':
     estimator = TrajectoryForceEstimator(dfTarget, train, track, optsDict=optsDict, trainLengthDependentValues=True)
     dfEstimate = estimator.estimate()
 
-    plotVelocityComparison(dfTarget, dfEstimate)  # todo: estimation misses last point
+    plotVelocityComparison(dfTarget, dfEstimate)
     plotForceComparison(dfTarget, dfEstimate)
+    plotTimeCoparison(dfTarget, dfEstimate)
