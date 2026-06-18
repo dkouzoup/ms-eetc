@@ -224,7 +224,7 @@ def splitLosses(fun):
     return funTr, funRgb
 
 
-def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False, integrateRollingResistance=False):
+def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses=False, integrateRollingResistance=False):
 
     unitScaling = 1e-6/3.6  # Nm -> kWh conversion
     totalMass = train.mass*train.rho
@@ -276,7 +276,11 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
         fs = (dfOut['Force (el) [N]']/totalMass).values.tolist()
         ps = (dfOut['Force (pnb) [N]']/totalMass).values.tolist()
         gs = (dfOut['Gradient [permil]']/1e3).values.tolist()
+        gl = (dfOut['Gradient linear term [permil/m]']/1e3).values.tolist()
         cr = dfOut['Curvature [1/m]'].values.tolist()
+        cl = dfOut['Curvature linear term [1/m^2]'].values.tolist()
+        cs = dfOut['CrossSection [m^2]'].values.tolist()
+        tf = computeTunnelFactor(cs, train, opts)
 
         losses = []
 
@@ -284,7 +288,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
 
             dt = ts[jj+1]-ts[jj]
 
-            eTr, eRgb = trainIntegrator.calcLosses(vs[jj], dt, fs[jj], ps[jj], gs[jj], cr[jj])
+            eTr, eRgb = trainIntegrator.calcLosses(vs[jj], dt, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
 
             eEl = eTr if fs[jj] >= 0 else eRgb
 
@@ -308,8 +312,12 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
         vs = dfOut['Velocity [m/s]'].values.tolist()
         fs = (dfOut['Force (acc) [N]']/totalMass).values.tolist()
         ps = (dfOut['Force (pnb) [N]']/totalMass).values.tolist()
-        gs = (dfOut['Gradient [permil]']/1e3).values.tolist()
+        gs = (dfOut['Gradient [permil]'] / 1e3).values.tolist()
+        gl = (dfOut['Gradient linear term [permil/m]'] / 1e3).values.tolist()
         cr = dfOut['Curvature [1/m]'].values.tolist()
+        cl = dfOut['Curvature linear term [1/m^2]'].values.tolist()
+        cs = dfOut['CrossSection [m^2]'].values.tolist()
+        tf = computeTunnelFactor(cs, train, opts)
 
         rr = []
 
@@ -317,7 +325,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
 
             ds = ss[jj+1]-ss[jj]
 
-            loss, _ = trainIntegrator.calcRollingResistance(vs[jj], ds, fs[jj], ps[jj], gs[jj], cr[jj])
+            loss, _ = trainIntegrator.calcRollingResistance(vs[jj], ds, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
 
             rr.append(totalMass*vecToNum(loss))
 
@@ -485,6 +493,16 @@ def latexify():
 
 def computeTunnelFactor(cross_section, train, opts):
 
+    if isinstance(cross_section, (list, tuple, np.ndarray, pd.Series)):
+
+        return np.array([computeTunnelFactor(cs, train, opts) for cs in cross_section], dtype=float)
+
+    cross_section = float(cross_section)
+
+    if np.isnan(cross_section):
+
+        raise ValueError("Tunnel cross section must not be NaN!")
+
     if cross_section == float("inf"):
 
         return 0 # no tunnel
@@ -493,6 +511,7 @@ def computeTunnelFactor(cross_section, train, opts):
     tunnelCoefficients = train.tunnelCoefficients
 
     if not tunnelCoefficients:
+
         raise ValueError("Tunnel cross section was specified, but train has no tunnel resistance data.")
 
     availableCrossSections = list(tunnelCoefficients.keys())

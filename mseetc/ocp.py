@@ -206,7 +206,7 @@ class casadiSolver():
                     ubg += [abs(upperBound)]*2
                     lbg += [-abs(lowerBound)]*2
 
-                # gradient and curvature of current index
+                # tunel properties of current index
                 grad = self.points.iloc[i]['Gradient [permil]']/1e3
                 gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil/m]"]/1e3
                 curv = self.points.iloc[i]['Curvature [1/m]']
@@ -257,7 +257,7 @@ class casadiSolver():
 
                     else:
 
-                        energyLossesTr, energyLossesRgb = trainIntegrator.calcLosses(ca.sqrt(velSq[i]), time[i+1]-time[i], Fel[i], Fpb[i], grad, curv)
+                        energyLossesTr, energyLossesRgb = trainIntegrator.calcLosses(ca.sqrt(velSq[i]), time[i+1]-time[i], Fel[i], Fpb[i], grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)
 
                         obj += self.steps[i]*Fel[i] + s[i]
 
@@ -471,7 +471,7 @@ class casadiSolver():
             df['Force (pnb) [N]'] = np.array(FpbOpt)*self.totalMass if self.withPnBrake else np.array([0]*(self.numIntervals+1))
             df['Slacks'] = np.array(sOpt)*self.totalMass
 
-            df = postProcessDataFrame(df, self.points, self.train)
+            df = postProcessDataFrame(df, self.points, self.train, self.opts)
 
         return df, stats
 

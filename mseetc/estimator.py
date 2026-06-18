@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from mseetc.efficiency import forceToLoad
 from mseetc.ocp import OptionsCasadiSolver
 from mseetc.track import Track, computeDiscretizationPoints
 from mseetc.train import Train, TrainIntegrator
@@ -10,7 +9,7 @@ from mseetc.utils import computeTunnelFactor
 from simulations.sim_launcher import get_power_loss_function
 
 
-class TrajectoryForceEstimator():
+class forceEstimator():
 
     def __init__(self, df, train, track, optsDict={}, trainLengthDependentValues=False, plotInterpolation=False):
 
@@ -23,9 +22,9 @@ class TrajectoryForceEstimator():
         self.track = track
 
         # targetTrajectory
-        self.targetTimes = df.index.to_numpy()
-        self.targetPositions = df["Position [m]"].to_numpy()
-        self.targetVelocities = df["Velocity [m/s]"].to_numpy()
+        self.targetTimes = df.index.to_numpy(dtype=float)
+        self.targetPositions = df["Position [m]"].to_numpy(dtype=float)
+        self.targetVelocities = df["Velocity [m/s]"].to_numpy(dtype=float)
 
         self.positionStart = self.targetPositions[0]
         self.positionEnd = self.targetPositions[-1]
@@ -58,11 +57,6 @@ class TrajectoryForceEstimator():
         trainModel = train.exportModel()
         self.totalMass = train.mass * train.rho
         self.trainIntegrator = TrainIntegrator(trainModel, self.opts.integrationMethod, self.opts.integrationOptions.toDict())
-
-        if self.opts.integrateLosses:
-
-            powerLossesTr, powerLossesRgb = train.powerLossesFuns()
-            self.trainIntegrator.initLosses(powerLossesTr, powerLossesRgb, self.totalMass)
 
 
     def plotInterpolationComparison(self):
@@ -322,6 +316,181 @@ def plotTimeCoparison(dfTarget, dfEstimate):
     plt.show()
 
 
+
+class energyEstimator():
+
+    def __init__(self, df, train, track=None, optsDict={}):
+
+        # input checking
+        train.checkFields()
+        self.checkDf(df)
+
+        self.opts = OptionsCasadiSolver(optsDict)
+
+        # train
+        self.train = train
+        trainModel = train.exportModel()
+        self.totalMass = train.mass * train.rho
+        self.trainIntegrator = TrainIntegrator(trainModel, self.opts.integrationMethod, self.opts.integrationOptions.toDict())
+
+        self.powerLossesTr, self.powerLossesRgb = train.powerLossesFuns()
+
+        # targetTrajectory
+        self.times = df.index.to_numpy(dtype=float)
+        self.positions = df["Position [m]"].to_numpy(dtype=float)
+        self.velocities = df["Velocity [m/s]"].to_numpy(dtype=float)
+        self.forcesEl = df["Force (el) [N]"].to_numpy(dtype=float) / self.totalMass
+        self.forcesPnb = df["Force (pnb) [N]"].to_numpy(dtype=float) / self.totalMass
+
+        self.ds = np.diff(self.positions)
+
+
+        if self.opts.integrateLosses:
+
+            if track is None:
+
+                raise ValueError("Track must be provided for loss integration.")
+
+            self.points = computeDiscretizationPoints(track, self.opts.numIntervals, self.opts, np.array([], dtype=float))
+
+            if not np.array_equal(self.points.index.to_numpy(), self.positions):
+
+                raise ValueError("Force profile has been computed using a different track discretization")
+
+            self.trainIntegrator.initLosses(self.powerLossesTr, self.powerLossesRgb, self.totalMass)
+
+
+    def checkDf(self, df):
+
+        if not isinstance(df, pd.DataFrame):
+
+            raise ValueError("Trajectory must be provided as a pandas DataFrame!")
+
+        requiredColumns = ["Position [m]", "Velocity [m/s]", "Force (el) [N]", "Force (pnb) [N]"]
+
+        for column in requiredColumns:
+
+            if column not in df.columns:
+
+                raise ValueError("Trajectory DataFrame must contain column '{}'!".format(column))
+
+        if len(df.index) == 0:
+
+            raise ValueError("Trajectory DataFrame must not be empty!")
+
+        try:
+
+            times = df.index.to_numpy(dtype=float)
+            positions = df["Position [m]"].to_numpy(dtype=float)
+            velocities = df["Velocity [m/s]"].to_numpy(dtype=float)
+            df["Force (el) [N]"].to_numpy(dtype=float)
+            df["Force (pnb) [N]"].to_numpy(dtype=float)
+
+        except ValueError:
+
+            raise ValueError("Trajectory time index, positions and velocities must be numeric!")
+
+        if len(positions) < 2:
+
+            raise ValueError("Trajectory DataFrame must contain at least two points!")
+
+        if np.any(np.diff(times) <= 0):
+
+            raise ValueError("Trajectory time index must be strictly increasing!")
+
+        if np.any(np.diff(positions) <= 0):
+
+            raise ValueError("Trajectory positions must be strictly increasing!")
+
+        if np.any(velocities < 0):
+
+            raise ValueError("Trajectory velocities must not be negative!")
+
+        if positions[0] < 0:
+
+            raise ValueError("First trajectory position must not be negative!")
+
+
+    def estimate(self):
+
+        opts = self.opts
+
+        driveTrainLosses = 0.0
+        usedEnergy = 0.0
+        regeneratedEnergy = 0.0
+
+        for i in range(opts.numIntervals):
+
+            if opts.energyOptimal:
+
+                if not opts.integrateLosses:
+
+                    # approximating interval with mid-point rule
+                    vMid = (self.velocities[i] + self.velocities[i+1]) / 2
+
+                    if self.forcesEl[i] > 0:
+
+                        loss = self.powerLossesTr(self.forcesEl[i], vMid) / vMid
+                        loss = np.asarray(loss, dtype=float).squeeze()
+                        driveTrainLosses += loss * self.ds[i]
+                        usedEnergy += self.ds[i] * (self.forcesEl[i] + loss)
+
+                    else:
+
+                        loss = self.powerLossesRgb(self.forcesEl[i], vMid) / vMid
+                        loss = np.asarray(loss, dtype=float).squeeze()
+                        driveTrainLosses += loss * self.ds[i]
+                        regeneratedEnergy += self.ds[i] * (-self.forcesEl[i] - loss)
+
+                else:
+
+                    grad = self.points.iloc[i]['Gradient [permil]'] / 1e3
+                    gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil/m]"] / 1e3
+                    curv = self.points.iloc[i]['Curvature [1/m]']
+                    curvLinearTerm = self.points.iloc[i]["Curvature linear term [1/m^2]"]
+                    crossSection = self.points.iloc[i]['CrossSection [m^2]']
+                    tunnelFactor = computeTunnelFactor(crossSection, self.train, self.opts)
+
+                    energyLossesTr, energyLossesRgb = self.trainIntegrator.calcLosses(self.velocities[i], self.times[i+1] - self.times[i], self.forcesEl[i], self.forcesPnb[i], grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)
+
+                    if self.forcesEl[i] > 0:
+
+                        driveTrainLosses += energyLossesTr
+                        usedEnergy = self.ds[i] * (self.forcesEl[i] + energyLossesTr)
+
+                    else:
+
+                        driveTrainLosses += energyLossesRgb
+                        regeneratedEnergy = self.ds[i] * -self.forcesEl[i] - energyLossesRgb
+
+
+        driveTrainLosses = driveTrainLosses * self.totalMass  / 3.6e6  # [kWh]
+        usedEnergy = usedEnergy * self.totalMass  / 3.6e6  # [kWh]
+        regeneratedEnergy = regeneratedEnergy * self.totalMass  / 3.6e6  # [kWh]
+        netEnergyUsed = usedEnergy - regeneratedEnergy  # [kWh]
+        mechanicalLosses = netEnergyUsed - driveTrainLosses  # [kWh]
+
+        energyDict = {
+            "Used energy [kWh]": usedEnergy,
+            "Regenerated energy [kWh]": regeneratedEnergy,
+            "Net energy used [kWh]": netEnergyUsed,
+            "Drive train losses [kWh]": driveTrainLosses,
+            "Mechanical losses [kWh]": mechanicalLosses
+        }
+
+        return energyDict
+
+
+    def printStats(self, energyStats):
+
+        print("")
+        print("Energy statistics")
+        print("-----------------")
+
+        for key, value in energyStats.items():
+            print("{}: {:.2f}".format(key, value))
+
+
 if __name__ == '__main__':
 
     dfTarget = pd.read_pickle("../data/StGallenWilTrajectory01.pkl")
@@ -335,9 +504,13 @@ if __name__ == '__main__':
 
     optsDict = {'numIntervals': 600, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
 
-    estimator = TrajectoryForceEstimator(dfTarget, train, track, optsDict=optsDict, trainLengthDependentValues=True)
-    dfEstimate = estimator.estimate()
+    forceEstimator = forceEstimator(dfTarget, train, track, optsDict=optsDict, trainLengthDependentValues=True)
+    dfEstimate = forceEstimator.estimate()
 
     plotVelocityComparison(dfTarget, dfEstimate)
     plotForceComparison(dfTarget, dfEstimate)
     plotTimeCoparison(dfTarget, dfEstimate)
+
+    energyEstimator = energyEstimator(dfEstimate, train, track=track, optsDict=optsDict)
+    energyStats = energyEstimator.estimate()
+    energyEstimator.printStats(energyStats)
