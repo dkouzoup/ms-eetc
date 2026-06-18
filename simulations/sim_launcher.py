@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     printStats(df, stats, solver, train)
 
-    df.to_pickle("../data/StGallenWilTrajectory01.pkl")
+    # df.to_pickle("../data/StGallenWilTrajectory01.pkl")
 
 
     # ETCS-adjusted speed profile
