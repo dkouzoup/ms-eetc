@@ -13,12 +13,16 @@ class TestETCS(unittest.TestCase):
 
     def testInterventionPointsForFlatTrack(self):
         '''
-        Verify that the ETCS braking curve calculator computes the expected
-        intervention points for a flat test track.
+        Verify that the force and energy estimation pipeline reproduces the
+        optimized energy consumption on a flat test track.
 
-        The test checks the main supervision limits I, P, W, SBI, and EBI
-        against known reference positions. A small absolute tolerance is used
-        because the values may vary slightly due to numerical computation.
+        The test first computes an energy-optimal reference trajectory with the
+        CasADi solver. Then, the force estimator reconstructs the traction and
+        braking forces from this trajectory, and the energy estimator computes
+        the resulting net energy consumption.
+
+        The estimated net energy consumption is compared against the original net enrgy consumption.
+        A small absolute tolerance is used because the values may vary slightly due to numerical approximation.
         '''
 
         Path(__file__).resolve()
@@ -37,7 +41,7 @@ class TestETCS(unittest.TestCase):
         optsTarget = {'numIntervals':800, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
 
         solver = casadiSolver(train, track, journey, optsTarget)
-        dfTarget, statsTraget = solver.solve()
+        dfTarget, statsTarget = solver.solve()
 
         optsEstimate = {'numIntervals': 600, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
 
@@ -50,13 +54,13 @@ class TestETCS(unittest.TestCase):
         tol = 0.1
 
         self.assertAlmostEqual(
-            statsTraget["Cost"],
+            statsTarget["Cost"],
             energyStats["Net energy used [kWh]"],
             delta=tol,
             msg=(
                 f"Net energy consumption is not within the expected tolerance. "
-                f"Expected: {statsTraget['Cost']:.2f} m, "
-                f"actual: {energyStats['Net energy used [kWh]']:.2f} m, "
-                f"allowed tolerance: ±{tol:.2f} m."
+                f"Expected: {statsTarget['Cost']:.2f} kWh, "
+                f"actual: {energyStats['Net energy used [kWh]']:.2f} kWh, "
+                f"allowed tolerance: ±{tol:.2f} kWh."
             )
         )
