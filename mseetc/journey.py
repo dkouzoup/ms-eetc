@@ -223,13 +223,13 @@ class Journey():
 
     def computeInitialAndTerminalStates(self):
 
-        self.initialTime = self.timingPoints.iloc[0]["Lower time constraint [s]"]
+        self.initialTime = float(self.timingPoints.iloc[0]["Lower time constraint [s]"])
 
-        self.terminalTime = self.timingPoints.iloc[-1]["Upper time constraint [s]"]
+        self.terminalTime = float(self.timingPoints.iloc[-1]["Upper time constraint [s]"])
 
-        self.initialVelocity = self.timingPoints.iloc[0]["Lower speed constraint [m/s]"]
+        self.initialVelocity = float(self.timingPoints.iloc[0]["Lower speed constraint [m/s]"])
 
-        self.terminalVelocity = self.timingPoints.iloc[-1]["Upper speed constraint [m/s]"]
+        self.terminalVelocity = float(self.timingPoints.iloc[-1]["Upper speed constraint [m/s]"])
 
 
     def getTimingPoint(self, position):
