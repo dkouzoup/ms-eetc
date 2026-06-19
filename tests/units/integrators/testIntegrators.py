@@ -96,3 +96,48 @@ class TestGradient(unittest.TestCase):
                 f"relative difference: {relDiff_RK_IRK:.6f}."
             )
         )
+
+    def testIntegratedLossesMatchMidpointApproximation(self):
+        '''
+        Verify that integrated drivetrain losses produce a similar energy cost as
+        the midpoint loss approximation.
+
+        The test solves the same energy-optimal problem twice: once with losses
+        integrated along each interval and once with the midpoint approximation.
+        The resulting energy costs should differ only by a small absolute tolerance.
+        '''
+
+        tol = 0.1
+        numIntervals = 200
+
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+
+        track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tests/fixtures/tracks')
+        track.updateTrainLengthDependentValues(train)
+
+        journey = Journey(config={'id': 'CH_StGallen_Wil_Journey_01'}, pathJSON='tests/fixtures/journeys')
+        track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
+
+        opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'integrateLosses': True}
+        solver = casadiSolver(train, track, journey, opts)
+        df, stats = solver.solve()
+
+        energyWithLossIntegration = stats['Cost']
+
+        opts = {'numIntervals': numIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}}
+        solver = casadiSolver(train, track, journey, opts)
+        df, stats = solver.solve()
+
+        energyWithMidpointApproximation = stats['Cost']
+
+        self.assertAlmostEqual(
+            energyWithLossIntegration,
+            energyWithMidpointApproximation,
+            delta=tol,
+            msg=(
+                f"Energy cost with integrated drivetrain losses is not within the expected tolerance of the midpoint loss approximation. "
+                f"Integrated losses: {energyWithLossIntegration:.2f} kWh, "
+                f"midpoint approximation: {energyWithMidpointApproximation:.2f} kWh, "
+                f"allowed tolerance: ±{tol:.2f} kWh."
+            )
+        )

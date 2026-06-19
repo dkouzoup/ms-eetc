@@ -288,7 +288,7 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
 
             dt = ts[jj+1]-ts[jj]
 
-            eTr, eRgb = trainIntegrator.calcLosses(vs[jj], dt, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
+            eTr, eRgb = trainIntegrator.calcLosses(vs[jj], dt, 0, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
 
             eEl = eTr if fs[jj] >= 0 else eRgb
 

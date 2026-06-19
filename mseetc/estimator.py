@@ -451,7 +451,7 @@ class energyEstimator():
                     crossSection = self.points.iloc[i]['CrossSection [m^2]']
                     tunnelFactor = computeTunnelFactor(crossSection, self.train, self.opts)
 
-                    energyLossesTr, energyLossesRgb = self.trainIntegrator.calcLosses(self.velocities[i], self.times[i+1] - self.times[i], self.forcesEl[i], self.forcesPnb[i], grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)
+                    energyLossesTr, energyLossesRgb = self.trainIntegrator.calcLosses(self.velocities[i], self.times[i+1] - self.times[i], 0, self.forcesEl[i], self.forcesPnb[i], grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)
 
                     if self.forcesEl[i] > 0:
 

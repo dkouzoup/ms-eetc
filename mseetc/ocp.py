@@ -257,7 +257,7 @@ class casadiSolver():
 
                     else:
 
-                        energyLossesTr, energyLossesRgb = trainIntegrator.calcLosses(ca.sqrt(velSq[i]), time[i+1]-time[i], Fel[i], Fpb[i], grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)
+                        energyLossesTr, energyLossesRgb = trainIntegrator.calcLosses(ca.sqrt(velSq[i]), time[i+1]-time[i],0, Fel[i], Fpb[i], grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)
 
                         obj += self.steps[i]*Fel[i] + s[i]
 
