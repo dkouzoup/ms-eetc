@@ -72,7 +72,7 @@ if __name__ == '__main__':
     track = Track(config={'id':'CH_StGallen_Wil'}, pathJSON='../tracks')
     track.updateTrainLengthDependentValues(train)
 
-    journey = Journey(config={'id':'CH_StGallen_Wil_Journey_01'}, pathJSON='../journeys')
+    journey = Journey(config={'id':'CH_StGallen_Wil_Journey_10'}, sectionIdx=0, pathJSON='../journeys')
     track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
     # non-adjusted speed profile
