@@ -66,11 +66,11 @@ class Train():
             raise ValueError("Redundant fields in train configuration: {}!".format(', '.join(set(config) - usedFields)))
 
         # read data
-        self.length = convertUnit(data['length']['value'], data['length']['unit'])  # train length [m]
+        self.length = convertUnit(data['length']['value'], data['length']['unit']) if "length" in data else None  # train length [m]
 
         self.mass = convertUnit(data['mass']['value'], data['mass']['unit'])  # train mass [kg]
 
-        self.rho = convertUnit(data['rho']['value'], data['rho']['unit'])  # rotating-mass factor [-]
+        self.rho = convertUnit(data['rho']['value'], data['rho']['unit']) if 'max traction force' in data else 1  # rotating-mass factor [-]
 
         if self.rho < 1:
 
@@ -105,7 +105,7 @@ class Train():
 
                 raise ValueError("Both efficiencies need to be specified in json file!")
 
-            if 'values' in 'efficiency traction' or 'values' in 'efficiency reg brake':
+            if 'values' in data['efficiency traction'] or 'values' in data['efficiency reg brake']:
 
                 raise ValueError("Dynamic efficiency from json file not implemented yet!")
 
@@ -114,29 +114,117 @@ class Train():
 
         if "tunnel resistance" in data:
 
-            tunnel_data = data["tunnel resistance"] # additive aerodynamic tunnel drag as dict per tunnel cross section
+            tunnelData = data["tunnel resistance"] # additive aerodynamic tunnel drag as dict per tunnel cross section
 
-            cross_section_unit = tunnel_data["units"]["cross section"] # tunnel cross section [m^2]
-            resistance_unit = tunnel_data["units"]["coefficient"] # resistance coefficient [N/(m/s)^2]
+            crossSectionUnit = tunnelData["units"]["cross section"] # tunnel cross section [m^2]
+            resistanceUnit = tunnelData["units"]["coefficient"] # resistance coefficient [N/(m/s)^2]
 
             self.tunnelCoefficients = {
-                convertUnit(cross_section, cross_section_unit): convertUnit(
+                convertUnit(cross_section, crossSectionUnit): convertUnit(
                     resistance,
-                    resistance_unit
+                    resistanceUnit
                 )
-                for cross_section, resistance in tunnel_data["values"]
+                for cross_section, resistance in tunnelData["values"]
             }
 
         else:
 
             self.tunnelCoefficients = {}
 
+
+        if "ETCS braking data" in data:
+
+            etcsData = data["ETCS braking data"]
+
+            requiredFields = {
+                "A_brake_emergency",
+                "A_brake_service",
+                "K_dry_rst",
+                "K_wet_rst",
+                "T_traction",
+                "T_be",
+                "v_uncertainty",
+                "T_bs"
+            }
+
+            if set(etcsData) != requiredFields:
+
+                missingFields = requiredFields - set(etcsData)
+                redundantFields = set(etcsData) - requiredFields
+
+                raise ValueError(
+                    "ETCS braking data must contain exactly the following fields: {}! "
+                    "Missing fields: {}. Redundant fields: {}.".format(
+                        ", ".join(sorted(requiredFields)),
+                        ", ".join(sorted(missingFields)) if missingFields else "none",
+                        ", ".join(sorted(redundantFields)) if redundantFields else "none",
+                    )
+                )
+
+
+            def readBrakingCurve(curveName):
+
+                brakingData = etcsData[curveName]
+
+                if set(brakingData) != {"units", "values"}:
+
+                    raise ValueError("ETCS braking curve '{}' must contain 'units' and 'values'!".format(curveName))
+
+                velocityUnit = brakingData["units"]["velocity"]  # velocity [m/s]
+                decelerationUnit = brakingData["units"]["deceleration"]  # positive deceleration [m/s^2]
+
+                return {
+                    "velocity [m/s]": [
+                        convertUnit(velocity, velocityUnit)
+                        for velocity, deceleration in brakingData["values"]
+                    ],
+                    "value [m/s^2]": [
+                        -convertUnit(deceleration, decelerationUnit)
+                        for velocity, deceleration in brakingData["values"]
+                    ]
+                }
+
+            self.ABrakeEmergency = readBrakingCurve("A_brake_emergency")  # emergency braking acceleration curve [m/s^2]
+
+            self.ABrakeService = readBrakingCurve("A_brake_service")  # service braking acceleration curve [m/s^2]
+
+            self.KDryRst = convertUnit(etcsData["K_dry_rst"]["value"], etcsData["K_dry_rst"]["unit"])  # correction factor for dry rail conditions [-]
+
+            self.KWetRst = convertUnit(etcsData["K_wet_rst"]["value"], etcsData["K_wet_rst"]["unit"])  # correction factor for wet rail conditions [-]
+
+            self.TTraction = convertUnit(etcsData["T_traction"]["value"], etcsData["T_traction"]["unit"])  # traction cut-off delay [s]
+
+            self.TBe = convertUnit(etcsData["T_be"]["value"], etcsData["T_be"]["unit"])  # emergency brake build-up time [s]
+
+            self.vUncertainty = convertUnit(etcsData["v_uncertainty"]["value"], etcsData["v_uncertainty"]["unit"])  # train-related speed uncertainty [-]
+
+            self.TBs = convertUnit(etcsData["T_bs"]["value"], etcsData["T_bs"]["unit"])  # service brake build-up time [s]
+
+        else:
+
+            self.ABrakeEmergency = None
+
+            self.ABrakeService = None
+
+            self.KDryRst = None
+
+            self.KWetRst = None
+
+            self.TTraction = None
+
+            self.TBe = None
+
+            self.vUncertainty = None
+
+            self.TBs = None
+
+
         self.checkFields()
 
 
     def checkFields(self):
 
-        if self.length is None or self.length < 0 or np.isinf(self.length):
+        if self.length is not None and (self.length < 0 or np.isinf(self.length)):
 
             raise ValueError("Train length must be a positive number, not {}!".format(self.length))
 
@@ -196,7 +284,6 @@ class Train():
 
                 raise ValueError("Rolling resistance coefficient {} must be positive, not {}!".format('r'+ii, coef))
 
-
         for crossSection, coef in self.tunnelCoefficients.items():
 
             if crossSection is None or crossSection <= 0 or np.isinf(crossSection):
@@ -206,6 +293,55 @@ class Train():
             if coef is None or coef <= 0 or np.isinf(coef):
 
                 raise ValueError("Tunnel resistance coefficient must be positive, not {}!".format(coef))
+
+        for curveName in ["ABrakeEmergency", "ABrakeService"]:
+
+            curve = getattr(self, curveName)
+
+            if curve is not None:
+
+                velocities = curve["velocity [m/s]"]
+                accelerations = curve["value [m/s^2]"]
+
+                if len(velocities) == 0 or len(velocities) != len(accelerations):
+
+                    raise ValueError("ETCS braking curve {} has invalid length!".format(curveName))
+
+                if any(velocity < 0 or np.isinf(velocity) for velocity in velocities):
+
+                    raise ValueError("ETCS braking curve {} contains invalid velocities!".format(curveName))
+
+                if any(acceleration >= 0 or np.isinf(acceleration) for acceleration in accelerations):
+
+                    raise ValueError("ETCS braking curve {} contains invalid accelerations!".format(curveName))
+
+                if any(v2 <= v1 for v1, v2 in zip(velocities[:-1], velocities[1:])):
+
+                    raise ValueError("ETCS braking curve {} velocities must be strictly increasing!".format(curveName))
+
+        if self.KDryRst is not None and (self.KDryRst <= 0 or np.isinf(self.KDryRst)):
+
+            raise ValueError("ETCS braking parameter 'K_dry_rst' must be positive, not {}!".format(self.KDryRst))
+
+        if self.KWetRst is not None and (self.KWetRst <= 0 or np.isinf(self.KWetRst)):
+
+            raise ValueError("ETCS braking parameter 'K_wet_rst' must be positive, not {}!".format(self.KWetRst))
+
+        if self.TTraction is not None and (self.TTraction <= 0 or np.isinf(self.TTraction)):
+
+            raise ValueError("ETCS braking parameter 'T_traction' must be positive, not {}!".format(self.TTraction))
+
+        if self.TBe is not None and (self.TBe <= 0 or np.isinf(self.TBe)):
+
+            raise ValueError("ETCS braking parameter 'T_be' must be positive, not {}!".format(self.TBe))
+
+        if self.TBs is not None and (self.TBs <= 0 or np.isinf(self.TBs)):
+
+            raise ValueError("ETCS braking parameter 'T_bs' must be positive, not {}!".format(self.TBs))
+
+        if self.vUncertainty is not None and (self.vUncertainty < 0 or self.vUncertainty > 1 or np.isinf(self.vUncertainty)):
+
+            raise ValueError("ETCS braking parameter 'v_uncertainty' must be between 0 and 1, not {}!".format(self.vUncertainty))
 
 
     def exportModel(self):

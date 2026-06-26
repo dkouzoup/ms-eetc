@@ -1,13 +1,13 @@
 import json
-import math
 import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mseetc.utils import checkTTOBenchVersion, convertUnit, pickEquallySpacedPoints, plotSpeedLimits, plotGradients, \
-    plotCurvatures
+from mseetc.etcs import getEtcsSpeedLimits
+from mseetc.utils import checkTTOBenchVersion, convertUnit, plotSpeedLimits, plotGradients, \
+    plotCurvatures, introduceSufficientShootingNodesForETCSBrakingCurves, getEquallyDistributedPoints
 
 plotDebug = False
 
@@ -91,14 +91,29 @@ def computeAltitude(gradients, length, altitudeStart=0):
     return df
 
 
-def computeDiscretizationPoints(track, numIntervals, opts):
+def computeDiscretizationPoints(track, numIntervals, opts, timingPointPositions):
     """
     Compute the space discretization points based on track characteristics and horizon length.
     """
 
     df1 = track.mergeDataFrames()
 
-    pos = pickEquallySpacedPoints(0, track.length, numIntervals, df1.index.to_numpy(dtype=float))
+    requiredPoints = np.concatenate([df1.index.to_numpy(dtype=float), timingPointPositions])
+
+    if opts.withEtcsBrakingCurves:
+
+        brakingPoints = introduceSufficientShootingNodesForETCSBrakingCurves(track, requiredPoints)
+        requiredPoints = np.append(requiredPoints, brakingPoints)
+
+    requiredPoints = np.unique(np.append(requiredPoints, [0, track.length]))
+    numMissingPoints = numIntervals + 1 - len(requiredPoints)
+
+    if numMissingPoints < 0:
+
+        raise ValueError(f"Increase num of intervals by {numMissingPoints}!")
+
+    newPositions = getEquallyDistributedPoints(0.0, track.length, numMissingPoints, requiredPoints)
+    pos = np.sort(np.unique(np.concatenate([requiredPoints, newPositions])))
 
     df2 = pd.DataFrame({'position [m]':pos}).set_index('position [m]')
     df3 = df2.join(df1, how='outer').ffill()
@@ -229,19 +244,56 @@ class Track():
         self.altitude = convertUnit(data['altitude']['value'], data['altitude']['unit']) if 'altitude' in data else 0
         self.title = data['metadata']['id']
 
-        self.importSpeedLimitTuples(data['speed limits']['values'], data['speed limits']['units']['velocity'])
+        self.importSpeedLimitTuples(data['speed limits']['values'],
+                                    data['speed limits']['units']['position'],
+                                    data['speed limits']['units']['velocity'])
 
         self.importGradientTuples(data['gradients']['values'] if 'gradients' in data else [(0.0, 0.0)],
+                                  data['gradients']['units']['position'] if 'gradients' in data else 'm',
                                   data['gradients']['units']['slope'] if 'gradients' in data else 'permil')
 
         self.importCurvatureTuples(data['curvatures']['values'] if 'curvatures' in data else [(0.0, "infinity", "infinity")],
+                                   data['curvatures']['units']['position'] if 'curvatures' in data else 'm',
                                    data['curvatures']['units']['radius at start'] if 'curvatures' in data else "m",
                                    data['curvatures']['units']['radius at end'] if 'curvatures' in data else "m",
                                    config['clothoidSamplingInterval'] if 'clothoidSamplingInterval' in config else None)
 
         self.importTunnelTuples(data['tunnels']['values'] if 'tunnels' in data else [(0.0, 0.0, "infinity")],
+                                data['tunnels']['units']['position'] if 'tunnels' in data else 'm',
                                 data['tunnels']['units']['length'] if 'tunnels' in data else 'm',
                                 data['tunnels']['units']['cross section'] if 'tunnels' in data else 'm^2')
+
+        if "ETCS braking data" in data:
+
+            etcsData = data["ETCS braking data"]
+
+            requiredFields = {
+                "M_NVAVADH",
+                "Kt_int"
+            }
+
+            if set(etcsData) != requiredFields:
+
+                missingFields = requiredFields - set(etcsData)
+                redundantFields = set(etcsData) - requiredFields
+
+                raise ValueError(
+                    "ETCS braking data must contain exactly the following fields: {}! "
+                    "Missing fields: {}. Redundant fields: {}.".format(
+                        ", ".join(sorted(requiredFields)),
+                        ", ".join(sorted(missingFields)) if missingFields else "none",
+                        ", ".join(sorted(redundantFields)) if redundantFields else "none",
+                    )
+                )
+
+            self.MNvavadh = convertUnit(etcsData["M_NVAVADH"]["value"], etcsData["M_NVAVADH"]["unit"])
+
+            self.KtInt = convertUnit(etcsData["Kt_int"]["value"], etcsData["Kt_int"]["unit"])
+
+        else:
+
+            self.MNvavadh = None
+            self.KtInt = None
 
 
         numStops = len(data['stops']['values'])
@@ -319,50 +371,72 @@ class Track():
 
             raise ValueError("Issue with tunnel cross sections!")
 
+        if self.MNvavadh is not None and (self.MNvavadh < 0 or np.isinf(self.MNvavadh)):
 
-    def importGradientTuples(self, tuples, unit='permil'):
+            raise ValueError("ETCS braking parameter 'M_NVAVADH' must be positive or zero, not {}!".format(self.MNvavadh))
+
+        if self.KtInt is not None and (self.KtInt <= 0 or np.isinf(self.KtInt)):
+
+            raise ValueError("ETCS braking parameter 'Kt_int' must be positive, not {}!".format(self.KtInt))
+
+
+    def importGradientTuples(self, tuples, unitPosition='m', unitGradient='permil'):
 
         if not self.lengthOk():
 
             raise ValueError("Cannot import gradients without a valid track length!")
 
-        if unit not in {'permil'}:
+        if unitPosition not in {'m', 'km'}:
+
+            raise ValueError("Specified gradient position unit not supported!")
+
+        if unitGradient not in {'permil'}:
 
             raise ValueError("Specified gradient unit not supported!")
 
+        tuples = [(convertUnit(p, unitPosition), g) for p, g in tuples]
         self.gradients = importTuples(tuples, 'Position [m]', 'Gradient [permil]')
 
         checkDataFrame(self.gradients, self.length)
 
+        self.gradientsTrainLengthIndependent = self.gradients.copy()
 
-    def importSpeedLimitTuples(self, tuples, unit='km/h'):
+
+    def importSpeedLimitTuples(self, tuples, unitPosition='m', unitVelocity='km/h'):
 
         if not self.lengthOk():
 
             raise ValueError("Cannot import speed limits without a valid track length!")
 
-        if unit not in {'km/h', 'm/s'}:
+        if unitPosition not in {'m', 'km'}:
+
+            raise ValueError("Specified speed limit position unit not supported!")
+
+        if unitVelocity not in {'km/h', 'm/s'}:
 
             raise ValueError("Specified speed unit not supported!")
 
-        tuples = [(p, convertUnit(v, unit)) for p,v in tuples]
+        tuples = [(convertUnit(p, unitPosition), convertUnit(v, unitVelocity)) for p, v in tuples]
         self.speedLimits = importTuples(tuples, 'Position [m]', 'Speed limit [m/s]')
 
         checkDataFrame(self.speedLimits, self.length)
 
-
-    def importCurvatureTuples(self, tuples, unitRadiusStart='m', unitRadiusEnd='m', clothoidSamplingInterval=None):
+    def importCurvatureTuples(self, tuples, unitPosition='m', unitRadiusStart='m', unitRadiusEnd='m', clothoidSamplingInterval=None):
 
         if not self.lengthOk():
 
             raise ValueError("Cannot import curvature without a valid track length!")
+
+        if unitPosition not in {'m', 'km'}:
+
+            raise ValueError("Specified curvature position unit not supported!")
 
         if unitRadiusStart not in {'m', 'km'} or unitRadiusEnd not in {'m', 'km'}:
 
             raise ValueError("Specified curvature radius unit not supported!")
 
         # if radius is 'infinity', the casting to float produces the float inf
-        tuples = [(p, convertUnit(float(radiusStart), unitRadiusStart), convertUnit(float(radiusEnd), unitRadiusEnd)) for p, radiusStart, radiusEnd in tuples]
+        tuples = [(convertUnit(p, unitPosition), convertUnit(float(radiusStart), unitRadiusStart), convertUnit(float(radiusEnd), unitRadiusEnd)) for p, radiusStart, radiusEnd in tuples]
 
         tuples = self.sampleClothoid(tuples, clothoidSamplingInterval)
 
@@ -453,17 +527,21 @@ class Track():
         return result
 
 
-    def importTunnelTuples(self, tuples, unitLength='m', unitCrossSection='m^2'):
+    def importTunnelTuples(self, tuples, unitPosition='m', unitLength='m', unitCrossSection='m^2'):
 
         if not self.lengthOk():
 
             raise ValueError("Cannot import tunnels without a valid track length!")
 
+        if unitPosition not in {'m', 'km'}:
+
+            raise ValueError("Specified tunnel position unit not supported!")
+
         if unitLength not in {'m', 'km'} or unitCrossSection not in {'m^2'}:
 
             raise ValueError("Specified tunnel units not supported!")
 
-        tuples = [(p, convertUnit(l, unitLength), convertUnit(c, unitCrossSection)) for p,l,c in tuples]
+        tuples = [(convertUnit(p, unitPosition), convertUnit(l, unitLength), convertUnit(c, unitCrossSection)) for p,l,c in tuples]
         self.crossSections = importTuples(tuples, 'Position [m]', ['Length [m]', 'CrossSection [m^2]'])
 
 
@@ -569,15 +647,12 @@ class Track():
         Truncate track to given positions.
         """
 
-        positionStart = 0 if positionStart is None else positionStart
-        positionEnd = self.length if positionEnd is None else positionEnd
+        positionStart = 0 if positionStart is None else convertUnit(positionStart, unit)
+        positionEnd = self.length if positionEnd is None else convertUnit(positionEnd, unit)
 
         if (not 0 <= positionStart < self.length) or (not 0 < positionEnd <= self.length) :
 
             raise ValueError("Given positions must be between limits of track!")
-
-        positionStart = convertUnit(positionStart, unit)
-        positionEnd = convertUnit(positionEnd, unit)
 
         newPos = pd.DataFrame({'Position [m]':[positionStart]}).set_index('Position [m]')
 
@@ -590,12 +665,21 @@ class Track():
 
             return dfOut
 
-        self.length -= positionStart + (self.length - positionEnd)
+        self.length = positionEnd - positionStart
 
         self.speedLimits = crop(self.speedLimits)
         self.gradients = crop(self.gradients)
         self.curvatures = crop(self.curvatures)
         self.crossSections = crop(self.crossSections)
+        self.gradientsTrainLengthIndependent = crop(self.gradientsTrainLengthIndependent)
+
+
+    def setEtcsSpeedLimits(self, train):
+
+        etcsPositions, etcsVelocities = getEtcsSpeedLimits(train, self)
+
+        self.etcsPositions = etcsPositions
+        self.etcsVelocities = etcsVelocities
 
 
     def updateTrainLengthDependentValues(self, train):

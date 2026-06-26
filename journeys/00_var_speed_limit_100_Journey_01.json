@@ -1,0 +1,34 @@
+{
+    "metadata": {
+      "id": "00_var_speed_limit_100_Journey_01",
+      "created by": "Roland Staerk",
+      "library version": "TTOBench v1.5",
+      "license": "BSD 2-Clause License",
+      "associated track": "00_var_speed_limit_100"
+    },
+    "timing points": {
+       "units": {
+         "position": "m",
+         "lower time constraint": "s",
+         "upper time constraint": "s",
+         "lower speed constraint": "km/h",
+         "upper speed constraint": "km/h"
+      },
+       "values": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            20000,
+            685,
+            685,
+            0,
+            0
+          ]
+      ]
+    }
+}

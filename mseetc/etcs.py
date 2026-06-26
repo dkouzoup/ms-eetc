@@ -5,7 +5,85 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from mseetc.track import Track
+
+def getTrackVelocityAtPositions(speedLimitPositions, speedLimits, positions):
+    """
+    Return stepwise track speed limit at given positions.
+    Assumes speedLimitPositions are sorted increasingly.
+    """
+
+    indices = np.searchsorted(speedLimitPositions, positions, side="right") - 1
+    indices = np.clip(indices, 0, len(speedLimits) - 1)
+
+    return speedLimits[indices]
+
+
+def getBrakingTargetsFromSpeedLimits(track):
+
+    speedLimitPositions = track.speedLimits.index.to_numpy(dtype=float)
+    speedLimits = track.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
+
+    # Add final stop target at end of track
+    speedLimitPositions = np.append(speedLimitPositions, track.length)
+    speedLimits = np.append(speedLimits, 0.0)
+
+    v_max = max(speedLimits)
+
+    targets = []
+
+    for idx in range(1, len(speedLimitPositions)):
+
+        # Only speed decreases require a braking curve
+        if speedLimits[idx] < speedLimits[idx-1]:
+
+            targets.append(
+                BrakingTarget(
+                position=speedLimitPositions[idx],
+                overlap=100,
+                permittedVelocity=v_max,
+                targetVelocity=speedLimits[idx],
+                )
+            )
+
+    return targets, speedLimitPositions, speedLimits
+
+
+def getEtcsSpeedLimits(train, track, positionStep=20.0):
+
+    targets, speedLimitPositions, speedLimits = getBrakingTargetsFromSpeedLimits(track)
+
+    calculator = EtcsBrakingCurveCalculator(train, track)
+
+    # Compute P curves for all speed decreases
+    pCurves = []
+
+    for target in targets:
+
+        curveSet, _ = calculator.computeTarget(target)
+        curveSet["P"].loc[target.position, "Velocity [m/s]"] = target.targetVelocity
+        pCurves.append(curveSet["P"])
+
+    # Build common position grid
+    positions = np.arange(0.0, track.length + positionStep, positionStep)
+    positions = np.union1d(positions, speedLimitPositions)
+    positions = np.sort(positions)
+
+    # Start with the ordinary track speed limit
+    etcsVelocities = getTrackVelocityAtPositions(speedLimitPositions, speedLimits, positions)
+
+    # Apply every ETCS P curve as an additional restriction
+    for pCurve in pCurves:
+
+        curvePositions = pCurve.index.to_numpy(dtype=float)
+        curveVelocities = pCurve["Velocity [m/s]"].to_numpy(dtype=float)
+
+        mask = ((curvePositions.min() <= positions) & (positions <= curvePositions.max()))
+
+        interpolatedCurveVelocities = np.interp(positions[mask], curvePositions, curveVelocities)
+
+        etcsVelocities[mask] = np.minimum(etcsVelocities[mask], interpolatedCurveVelocities)
+
+    return positions, etcsVelocities
 
 
 def shiftCurveByTime(dfCurve, timeShift):
@@ -81,9 +159,12 @@ def addEndPointToCurve(curve, velocity, end_position):
 def trimCurveToMaxVelocity(curve, maxVelocity):
 
     velocities = curve["Velocity [m/s]"].to_numpy(dtype=float)
-    keep_mask = velocities <= maxVelocity
 
-    return curve[keep_mask].copy()
+    keepMask = velocities <= maxVelocity
+    firstKeptIdx = np.where(keepMask)[0][0]
+    keepMask[max(firstKeptIdx - 1, 0)] = True
+
+    return curve[keepMask].copy()
 
 
 def trimCurveFromMinVelocity(curve, minVelocity):
@@ -131,9 +212,9 @@ class EtcsBrakingCurveCalculator:
     - Curves are computed backwards from the target position.
     """
 
-    def __init__(self, trainBrakingData, track, distancePre=3000, distancePost=1000):
+    def __init__(self, train, track, distancePre=3000, distancePost=1000):
 
-        self.trainBrakingData = trainBrakingData
+        self.train = train
         self.track = track
 
         # Compute the braking curve using fixed time steps of length dt.
@@ -165,10 +246,10 @@ class EtcsBrakingCurveCalculator:
         if not 0 <= target.permittedVelocity < 400 / 3.6:
             raise ValueError("permittedVelocity must be between 0 and 400 km/h.")
 
-        if not 0 < target.EoA < self.track.length:
+        if not 0 < target.EoA <= self.track.length:
             raise ValueError("EoA must lie within the track length.")
 
-        if not 0 < target.SvL < self.track.length:
+        if not 0 < target.SvL <= self.track.length + target.overlap:
             raise ValueError("SvL must lie within the track length.")
 
         if not 0 <= target.targetVelocity < target.permittedVelocity:
@@ -177,16 +258,12 @@ class EtcsBrakingCurveCalculator:
 
     def computeABrakeSafe(self):
 
-        trainBrakingData = self.trainBrakingData
+        velocities = self.train.ABrakeEmergency["velocity [m/s]"]
+        A_emergency_values = self.train.ABrakeEmergency["value [m/s^2]"]
 
-        braking = trainBrakingData["A_brake_emergency [m/s^2]"]
-
-        velocities = braking["velocity [m/s]"]
-        A_emergency_values = braking["value [m/s^2]"]
-
-        K_dry_rst = trainBrakingData["K_dry_rst [-]"]
-        M_NVAVADH = trainBrakingData["M_NVAVADH [-]"]
-        K_wet_rst = trainBrakingData["K_wet_rst [-]"]
+        K_dry_rst = self.train.KDryRst
+        M_NVAVADH = self.track.MNvavadh
+        K_wet_rst = self.train.KWetRst
 
         K_wet_corr = K_wet_rst + M_NVAVADH * (1 - K_wet_rst)
 
@@ -203,18 +280,22 @@ class EtcsBrakingCurveCalculator:
 
     def computeAGradient(self, currentPosition):
 
-        positions = self.track.gradients.index.values
-        gradients = self.track.gradients["Gradient [permil]"].values
+        positions = self.track.gradientsTrainLengthIndependent.index.to_numpy(dtype=float)
+        gradients = self.track.gradientsTrainLengthIndependent["Gradient [permil]"].to_numpy(dtype=float)
 
-        idx = bisect_right(positions, currentPosition) - 1
-        idx = max(0, min(idx, len(positions) - 1))
+        # If the backward-computed curve extends before the first known gradient point, assume flat track.
+        if currentPosition < positions[0]:
 
-        if idx == 0:
-
-            # If the backward-computed curve extends before the first known gradient point, assume flat track.
             return 0
 
-        gradient = gradients[idx]
+        idxFront = bisect_right(positions, currentPosition) - 1
+        idxRear = bisect_right(positions, currentPosition - self.train.length) - 1
+
+        idxFront = max(0, min(idxFront, len(positions) - 1))
+        idxRear = max(0, min(idxRear, len(positions) - 1))
+
+        gradient = np.min(gradients[idxRear:idxFront + 1])
+
         return 9.81 * gradient * 0.001
 
 
@@ -275,12 +356,10 @@ class EtcsBrakingCurveCalculator:
 
     def computeEBICurve(self, EBD_curve, targetVelocity):
 
-        trainBrakingData = self.trainBrakingData
-
-        T_traction = trainBrakingData["T_traction [s]"]
-        T_be = trainBrakingData["T_be [s]"]
-        Kt_int = trainBrakingData["Kt_int [-]"]
-        v_uncertainty = trainBrakingData["v_uncertainty [%]"] * 0.01
+        T_traction = self.train.TTraction
+        T_be = self.train.TBe
+        Kt_int = self.track.KtInt
+        v_uncertainty = self.train.vUncertainty
 
         positionsEBD = EBD_curve.index.to_numpy()
         velocitiesEBD = EBD_curve["Velocity [m/s]"].to_numpy()
@@ -293,7 +372,7 @@ class EtcsBrakingCurveCalculator:
 
         for pos, vel in zip(positionsEBD, velocitiesEBD):
 
-            A_est1 = 0.1  # todo
+            A_est1 = 0.0  # todo
             A_est2 = min(A_est1, 0.4)
 
             V_est = (vel - A_est1 * T_traction - A_est2 * T_berem) / (1 + v_uncertainty)
@@ -360,24 +439,19 @@ class EtcsBrakingCurveCalculator:
         return SBI_curve
 
 
-    def processCurvesBeforeTarget(self, curves, target):
+    def trimCurves(self, curves, target):
 
         permittedVelocity = target.permittedVelocity
-        start_position = target.position - self.distancePre
 
         speedLimits = computeCeilingSpeedLimits(permittedVelocity)
 
         curves["EBI"] = trimCurveToMaxVelocity(curves["EBI"], speedLimits["EBI [m/s]"])
-        curves["EBI"] = addStartPointToCurve(curves["EBI"], speedLimits["EBI [m/s]"], start_position)
 
         curves["SBI"] = trimCurveToMaxVelocity(curves["SBI"], speedLimits["SBI [m/s]"])
-        curves["SBI"] = addStartPointToCurve(curves["SBI"], speedLimits["SBI [m/s]"], start_position)
 
         curves["W"] = trimCurveToMaxVelocity(curves["W"], speedLimits["Warning [m/s]"])
-        curves["W"] = addStartPointToCurve(curves["W"], speedLimits["Warning [m/s]"], start_position)
 
         curves["P"] = trimCurveToMaxVelocity(curves["P"], permittedVelocity)
-        curves["P"] = addStartPointToCurve(curves["P"], permittedVelocity, start_position)
 
         curves["I"] = trimCurveToMaxVelocity(curves["I"], permittedVelocity)
 
@@ -391,7 +465,25 @@ class EtcsBrakingCurveCalculator:
 
         return curves
 
-    def processCurvcesAfterTarget(self, curves, target):
+
+    def processCurvesBeforeTarget(self, curves, target):
+
+        permittedVelocity = target.permittedVelocity
+        start_position = target.position - self.distancePre
+
+        speedLimits = computeCeilingSpeedLimits(permittedVelocity)
+
+        curves["EBI"] = addStartPointToCurve(curves["EBI"], speedLimits["EBI [m/s]"], start_position)
+
+        curves["SBI"] = addStartPointToCurve(curves["SBI"], speedLimits["SBI [m/s]"], start_position)
+
+        curves["W"] = addStartPointToCurve(curves["W"], speedLimits["Warning [m/s]"], start_position)
+
+        curves["P"] = addStartPointToCurve(curves["P"], permittedVelocity, start_position)
+
+        return curves
+
+    def processCurvesAfterTarget(self, curves, target):
 
         targetVelocity = target.targetVelocity
         end_position = target.position + self.distancePost
@@ -425,10 +517,9 @@ class EtcsBrakingCurveCalculator:
     def computeTarget(self, target):
 
         self.validateInput(target)
-        trainBrakingData = self.trainBrakingData
 
         ABrakeSafeProfile = self.computeABrakeSafe()
-        T_indication = max(0.8 * trainBrakingData["T_bs [s]"], 5) + self.T_driver
+        T_indication = max(0.8 * self.train.TBs, 5) + self.T_driver
 
         curves = {}
 
@@ -436,11 +527,11 @@ class EtcsBrakingCurveCalculator:
 
         curves["EBI"] = self.computeEBICurve(curves["EBD"], target.targetVelocity)
 
-        curves["SBI2"] = shiftCurveByTime(curves["EBI"], trainBrakingData["T_bs2 [s]"])
+        curves["SBI2"] = shiftCurveByTime(curves["EBI"], self.train.TBs)
 
-        curves["SBD"] = self.computeBrakingCurve(self.trainBrakingData["A_brake_service [m/s^2]"], target.EoA, target.permittedVelocity, target.targetVelocity)
+        curves["SBD"] = self.computeBrakingCurve(self.train.ABrakeService, target.EoA, target.permittedVelocity, target.targetVelocity)
 
-        curves["SBI1"] = shiftCurveByTime(curves["SBD"], trainBrakingData["T_bs1 [s]"])
+        curves["SBI1"] = shiftCurveByTime(curves["SBD"], self.train.TBs)
 
         curves["SBI"] = self.computeSBICurve(curves["SBI1"], curves["SBI2"])
 
@@ -450,13 +541,11 @@ class EtcsBrakingCurveCalculator:
 
         curves["I"] = shiftCurveByTime(curves["P"], T_indication)
 
-        curves = self.processCurvesBeforeTarget(curves, target)
+        curves = self.trimCurves(curves, target)
 
-        if target.targetVelocity > 0:
+        interventionPoints = self.computeInterventionPoints(curves, target)
 
-            curves = self.processCurvcesAfterTarget(curves, target)
-
-        return curves
+        return curves, interventionPoints
 
 
     def plotCurves(self, curves, target):
@@ -493,39 +582,56 @@ class EtcsBrakingCurveCalculator:
         plt.show()
 
 
+    def computeInterventionPoints(self, curves, target):
+
+        interventionPoints = {}
+
+        for name, curve in curves.items():
+
+            curvePositions = curve.index.to_numpy(dtype=float)
+            curveVelocities = curve["Velocity [m/s]"].to_numpy(dtype=float)
+            interventionPoints[name] = target.position - np.interp(target.permittedVelocity, curveVelocities[::-1], curvePositions[::-1])
+
+        return interventionPoints
+
+
+    def printInterventionPoints(self, interventionPoints):
+
+        for name, value in interventionPoints.items():
+
+            print(name, " point: ", round(value, 2))
+
+
 if __name__ == '__main__':
 
-    trainBrakingData = {
-        "A_brake_emergency [m/s^2]": {
-            "velocity [m/s]": [0, 20, 40, 60],
-            "value [m/s^2]": [-0.9, -0.85, -0.8, -0.75],
-        },
-        "A_brake_service [m/s^2]": {
-            "velocity [m/s]": [0, 20, 40, 60],
-            "value [m/s^2]": [-0.5, -0.45, -0.4, -0.35],
-        },
-        "K_dry_rst [-]": 0.8,
-        "M_NVAVADH [-]": 0,
-        "K_wet_rst [-]": 0.9,
-        "T_traction [s]": 1,
-        "T_be [s]": 4,
-        "Kt_int [-]": 1.15,
-        "v_uncertainty [%]": 2.98,
-        "T_bs [s]": 3,
-        "T_bs1 [s]": 3,
-        "T_bs2 [s]": 3,
-    }
+    from mseetc.track import Track
+    from mseetc.train import Train
+
+    train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='../trains')
 
     track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='../tracks')
+    track.updateTrainLengthDependentValues(train)
 
     target = BrakingTarget(
             position=5000,
             overlap= 100,
-            permittedVelocity=160/3.6,
-            targetVelocity=0/3.6
+            permittedVelocity=140/3.6,
+            targetVelocity=00/3.6
     )
 
-    calculator = EtcsBrakingCurveCalculator(trainBrakingData, track, distancePre=5000, distancePost=1000)
-    curve_set = calculator.computeTarget(target)
+    addConstantVelocitySections = True
+
+    calculator = EtcsBrakingCurveCalculator(train, track, distancePre=5000, distancePost=1000)
+    curve_set, interventionPoints = calculator.computeTarget(target)
+
+    calculator.printInterventionPoints(interventionPoints)
+
+    if addConstantVelocitySections:
+
+        curve_set = calculator.processCurvesBeforeTarget(curve_set, target)
+
+        if target.targetVelocity > 0:
+            curve_set = calculator.processCurvesAfterTarget(curve_set, target)
 
     calculator.plotCurves(curve_set, target)
+

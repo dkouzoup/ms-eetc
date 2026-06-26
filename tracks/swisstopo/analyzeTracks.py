@@ -56,8 +56,8 @@ if __name__ == '__main__':
 
     fig2, ax2 = plt.subplots(figsize=(16, 8))
 
-    ax2.step(SBB_track.speedLimits.index.values / 1000, SBB_track.speedLimits["Speed limit [m/s]"].to_numpy()*3.6, label="SBB")
-    ax2.step((Topo_track.speedLimits.index.values-shift) / 1000, Topo_track.speedLimits["Speed limit [m/s]"].to_numpy()*3.6, label="Topo")
+    ax2.step(SBB_track.speedLimits.index.values / 1000, SBB_track.speedLimits["Speed limit [m/s]"].to_numpy()*3.6, where="post", label="SBB")
+    ax2.step((Topo_track.speedLimits.index.values-shift) / 1000, Topo_track.speedLimits["Speed limit [m/s]"].to_numpy()*3.6, where="post", label="Topo")
     ax2.set_title("Altitude Comparison")
     ax2.set_xlabel("Position [km]")
     ax2.set_ylabel("Velocity [km/h]")

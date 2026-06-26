@@ -1,0 +1,34 @@
+{
+    "metadata": {
+      "id": "test_flat_with_tunnel_Journey_01",
+      "created by": "Roland Staerk",
+      "library version": "TTOBench v1.5",
+      "license": "BSD 2-Clause License",
+      "associated track": "test_flat_with_tunnel"
+    },
+    "timing points": {
+       "units": {
+         "position": "m",
+         "lower time constraint": "s",
+         "upper time constraint": "s",
+         "lower speed constraint": "km/h",
+         "upper speed constraint": "km/h"
+      },
+       "values": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            28000,
+            695,
+            695,
+            0,
+            0
+          ]
+      ]
+    }
+}

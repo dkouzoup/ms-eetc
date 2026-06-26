@@ -1,12 +1,11 @@
 import numpy as np
 import pandas as pd
-import casadi as ca
 
 from mseetc.train import *
 
 from mseetc.track import computeDiscretizationPoints
 
-from mseetc.utils import Options, var, postProcessDataFrame, splitLosses, computeTunnelFactor
+from mseetc.utils import Options, var, postProcessDataFrame, splitLosses, computeTunnelFactor, isSet
 
 
 class OptionsCasadiSolver(Options):
@@ -27,9 +26,11 @@ class OptionsCasadiSolver(Options):
 
         self.integrateLosses = False  # integrate losses or take mid-point rule
 
-        self.chooseClosestTunnelCrossSection = True # if exact tunnel cross section is not specified in train tunnel resistances, choose the closest value
+        self.chooseClosestTunnelCrossSection = True  # if exact tunnel cross section is not specified in train tunnel resistances, choose the closest value
 
         self.pwcLengthDependentTrackAttributes = False
+
+        self.withEtcsBrakingCurves = False  # use ETCS braking curves
 
         super().__init__(paramsDict)
 
@@ -81,11 +82,12 @@ class OptionsCasadiSolver(Options):
 class casadiSolver():
     "NLP solver object using casadi and ipopt."
 
-    def __init__(self, train, track, optsDict={}):
+    def __init__(self, train, track, journey, optsDict={}):
 
         # input checking
         track.checkFields()
         train.checkFields()
+        journey.checkFields()
 
         opts = OptionsCasadiSolver(optsDict)
 
@@ -125,8 +127,18 @@ class casadiSolver():
 
         # track parameters
 
-        self.points = computeDiscretizationPoints(track, numIntervals, opts)
+        if opts.withEtcsBrakingCurves:
+
+            track.setEtcsSpeedLimits(train)
+
+        timingPointPositions = journey.timingPoints.index.to_numpy(dtype=float)[1:-1] - journey.positionStart
+        self.points = computeDiscretizationPoints(track, numIntervals, opts, timingPointPositions)
         self.steps = np.diff(self.points.index)
+
+        if opts.withEtcsBrakingCurves:
+
+            etcsVelocities = np.interp(self.points.index.to_numpy(), track.etcsPositions, track.etcsVelocities)
+            self.points["Speed limit [m/s]"] = np.maximum(etcsVelocities, velocityMin)
 
         # real-time parameters
 
@@ -264,28 +276,60 @@ class casadiSolver():
             z += [time[i]]
             z += [velSq[i]]
 
-            if i == 0:
+            position = self.points.index.values[i]
+            timingPoint = journey.getTimingPoint(position + journey.positionStart)
 
-                # initial state constraints
-                lbz += [self.initialTime, self.initialVelocitySquared]
-                ubz += [self.initialTime, self.initialVelocitySquared]
+            speedLimit = self.points.iloc[i]['Speed limit [m/s]']
+            speedLimit = min(speedLimit, velocityMax)
 
-            elif i == numIntervals:
-
-                # terminal state constraints
-                lbz += [self.initialTime, self.terminalVelocitySquared]
-                ubz += [self.terminalTime, self.terminalVelocitySquared]
-
-            else:
-
-                # state constraints
-                speedLimit = self.points.iloc[i]['Speed limit [m/s]']
-                speedLimit = min(speedLimit, velocityMax)
+            if i > 0:
 
                 speedLimit = min(speedLimit, self.points.iloc[i-1]['Speed limit [m/s]'])  # do not accelerate before speed limit increase
 
-                lbz += [self.initialTime, velocityMin**2]
-                ubz += [self.terminalTime, speedLimit**2]
+            timeLower = self.initialTime
+            timeUpper = self.terminalTime
+
+            velocityLower = velocityMin ** 2
+            velocityUpper = speedLimit ** 2
+
+            if timingPoint is not None:
+
+                timeMinPoint = timingPoint["Lower time constraint [s]"]
+                timeMaxPoint = timingPoint["Upper time constraint [s]"]
+                velocityMinPoint = timingPoint["Lower speed constraint [m/s]"]
+                velocityMaxPoint = timingPoint["Upper speed constraint [m/s]"]
+
+                if isSet(timeMinPoint):
+
+                    timeLower = timeMinPoint
+
+                if isSet(timeMaxPoint):
+
+                    timeUpper = timeMaxPoint
+
+                if isSet(velocityMinPoint):
+
+                    velocityLower = max(velocityLower, velocityMinPoint ** 2)
+
+                if isSet(velocityMaxPoint):
+
+                    velocityUpper = min(velocityUpper, velocityMaxPoint ** 2)
+
+            if i == 0:
+
+                timeLower = self.initialTime
+                velocityLower = self.initialVelocitySquared
+                velocityUpper = self.initialVelocitySquared
+
+            elif i == numIntervals:
+
+                timeUpper = self.terminalTime
+                velocityLower = self.terminalVelocitySquared
+                velocityUpper = self.terminalVelocitySquared
+
+            lbz += [timeLower, velocityLower]
+            ubz += [timeUpper, velocityUpper]
+
 
         # scaling of objective function (fixes convergence issues when using powerLosses)
 
@@ -313,6 +357,7 @@ class casadiSolver():
         self.withRgBrake = withRgBrake
         self.withPnBrake = withPnBrake
         self.train = train
+        self.journey = journey
         self.energyOptimal = opts.energyOptimal
         self.scalingFactorObjective = scalingFactorObjective
         self.opts = opts
@@ -323,7 +368,13 @@ class casadiSolver():
         self.ubg = ca.vcat(ubg)
 
 
-    def solve(self, terminalTime, initialTime=0, terminalVelocity=1, initialVelocity=1):
+    def solve(self):
+
+        initialTime = self.journey.initialTime
+        terminalTime = self.journey.terminalTime
+        initialVelocity = self.journey.initialVelocity
+        terminalVelocity = self.journey.terminalVelocity
+
 
         # check boundary conditions on time
 
@@ -430,6 +481,7 @@ if __name__ == '__main__':
 
     from mseetc.train import Train
     from mseetc.track import Track
+    from mseetc.journey import Journey
 
     # Example on how to solve an OCP
 
@@ -437,11 +489,14 @@ if __name__ == '__main__':
 
     track = Track(config={'id':'00_var_speed_limit_100'})
 
+    journey = Journey(config={'id':'00_var_speed_limit_100_Journey_01'}, pathJSON='../journeys')
+    track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
+
     opts = {'numIntervals':200, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}
 
-    solver = casadiSolver(train, track, opts)
+    solver = casadiSolver(train, track, journey, opts)
 
-    df, stats = solver.solve(1541)
+    df, stats = solver.solve()
 
     # print some info
     if df is not None:

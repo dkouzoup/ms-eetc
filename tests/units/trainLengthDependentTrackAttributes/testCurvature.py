@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
+from mseetc.journey import Journey
 from mseetc.ocp import casadiSolver, OptionsCasadiSolver
 from mseetc.track import Track
 from mseetc.train import Train, TrainIntegrator
@@ -55,7 +56,7 @@ class TestCurvature(unittest.TestCase):
         CVODES is used as the integrator.
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
 
         optsDict = {'integrationMethod': 'CVODES'}
         opts = OptionsCasadiSolver(optsDict)
@@ -191,7 +192,7 @@ class TestCurvature(unittest.TestCase):
         RK substeps are increased until convergence
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
 
         optsDict = {'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps': 0, 'numSteps': 1}}
         opts = OptionsCasadiSolver(optsDict)
@@ -342,7 +343,7 @@ class TestCurvature(unittest.TestCase):
         Time approx steps are increased until convergence
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
         trainModel = train.exportModel()
 
         # Scenario
@@ -488,7 +489,7 @@ class TestCurvature(unittest.TestCase):
         headingTolerance  = 1e-6
 
         trainLength = 800   # [m]
-        track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tracks')
+        track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tests/fixtures/tracks')
 
         # track needs to be straight at least train length meters before the end of the track
         track.curvatures = track.curvatures[track.curvatures.index < track.length - trainLength]
@@ -496,7 +497,7 @@ class TestCurvature(unittest.TestCase):
 
         df_heading_indep = computeHeadingFromCurvature(track.curvatures, track.length)
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = trainLength
         track.updateTrainLengthDependentValues(train)
 
@@ -546,31 +547,29 @@ class TestCurvature(unittest.TestCase):
         linear curvatures or equivalent piecewise constant curvatures.
         '''
 
-        startPosition = 0  # [m]
-        endPosition = 5000  # [m]
-        duration = 5000/(60/3.6)  # [s]
-
         energyRelativeTolerance = 1e-4
         numIntervals = 100
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = 600
 
-        track = Track(config={'id': 'test_two_radii'}, pathJSON='tracks')
-        track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
+        track = Track(config={'id': 'test_two_radii'}, pathJSON='tests/fixtures/tracks')
         track.updateTrainLengthDependentValues(train)
+
+        journey = Journey(config={'id': 'CH_StGallen_Wil_Journey_01'}, pathJSON='tests/fixtures/journeys')
+        track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
         # PWL Curvatures
         opts = {'numIntervals': numIntervals, 'integrationMethod': 'CVODES'}
-        solver = casadiSolver(train, track, opts)
-        pwl_df, pwl_stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        pwl_df, pwl_stats = solver.solve()
 
         energyConsumptionWithLinearTerms = pwl_stats['Cost']
 
         # PWC Curvatures
         opts = {'numIntervals': numIntervals, 'integrationMethod': 'CVODES', 'pwcLengthDependentTrackAttributes': True}
-        solver = casadiSolver(train, track, opts)
-        pwc_df, pwc_stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        pwc_df, pwc_stats = solver.solve()
 
         energyConsumptionWithPwcTerms= pwc_stats['Cost']
 
@@ -616,27 +615,29 @@ class TestCurvature(unittest.TestCase):
 
         relativeTolerance = 1e-2
         trainLength = 10  # [m]
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='trains')
+        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = trainLength
 
-        track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tracks')
+        track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tests/fixtures/tracks')
         track.gradients = track.gradients.iloc[[0]]
         track.gradients["Gradient [permil]"].iloc[0] = 0
+
+        journey = Journey(config={'id': 'CH_StGallen_Wil_Journey_02'}, pathJSON='tests/fixtures/journeys')
+        track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
         # track needs to be straight at least train length meters before the end of the track
         track.curvatures = track.curvatures[track.curvatures.index < track.length - trainLength]
         track.curvatures.loc[track.length - trainLength] = {"Curvature [1/m]": 0.0}
 
-        duration = track.length / (80/3.6)
-
         # train-length-independent
         opts = {'numIntervals':600, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':0}, 'energyOptimal':True}
-        solver = casadiSolver(train, track, opts)
-        indep_df, indep_stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        indep_df, indep_stats = solver.solve()
 
+        # train-length-dependent
         track.updateTrainLengthDependentValues(train)
-        solver = casadiSolver(train, track, opts)
-        dep_df, dep_stats = solver.solve(duration)
+        solver = casadiSolver(train, track, journey, opts)
+        dep_df, dep_stats = solver.solve()
 
         energyConsumptionIndependentOfTrainLength = indep_stats['Cost']
         energyConsumptionDependentOfTrainLength = dep_stats['Cost']
