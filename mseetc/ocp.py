@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from mseetc.train import *
@@ -495,7 +496,7 @@ if __name__ == '__main__':
 
     solver = casadiSolver(train, track, journey, opts)
 
-    df, stats = solver.solve(journey)
+    df, stats = solver.solve()
 
     # print some info
     if df is not None:
