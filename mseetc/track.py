@@ -237,7 +237,7 @@ class Track():
 
             data = json.load(file)
 
-        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3', '1.4'])
+        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3', '1.4', '1.5'])
 
         # read data
         self.length = convertUnit(data['stops']['values'][-1], data['stops']['unit'])

@@ -2,7 +2,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from mseetc.efficiency import totalLossesFunction
-from mseetc.etcs import getEtcsSpeedLimits
 from mseetc.ocp import casadiSolver
 
 

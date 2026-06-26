@@ -12,6 +12,25 @@ class Journey():
     def __init__(self, config, sectionIdx=0, pathJSON=Path(__file__).parent.parent / 'journeys') -> None:
         """
         Constructor of Journey objects.
+
+        Parameters
+        ----------
+        config : dict
+            Journey configuration. Must contain the key 'id'.
+
+        sectionIdx : int, optional
+            Zero-based index of the journey section to select.
+
+            A journey file may contain timing points for multiple journey sections.
+            The section index selects one section by cropping the
+            complete timing point list to the timing points between the
+            corresponding departure and arrival stopping points.
+
+            After cropping, time constraints are shifted so that the selected
+            departure time becomes 0.
+
+        pathJSON : str or pathlib.Path, optional
+            Path to the directory containing the journey JSON files.
         """
 
         # check config
@@ -47,6 +66,12 @@ class Journey():
 
 
     def selectJourneySection(self, sectionIdx):
+        """
+        Select one journey section from the complete timing point list.
+
+        The selected section is defined by the departure and arrival stopping
+        points corresponding to the given zero-based section index.
+        """
 
         self.sectionIdx = sectionIdx
 
