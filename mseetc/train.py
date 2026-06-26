@@ -96,7 +96,7 @@ class Train():
 
         self.r1 = convertUnit(data['rolling resistance r1']['value'], data['rolling resistance r1']['unit'])  # linear term [N/(m/s)]
 
-        self.r2 = convertUnit(data['rolling resistance r2']['value'], data['rolling resistance r2']['unit'])  # quadratic term [N/(m/s)^2
+        self.r2 = convertUnit(data['rolling resistance r2']['value'], data['rolling resistance r2']['unit'])  # quadratic term [N/(m/s)^2]
 
         # TODO: unify with case of dynamic efficiency
         if 'efficiency traction' in data or 'efficiency reg brake' in data:
