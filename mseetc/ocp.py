@@ -207,7 +207,7 @@ class casadiSolver():
                     ubg += [abs(upperBound)]*2
                     lbg += [-abs(lowerBound)]*2
 
-                # tunel properties of current index
+                # gradient, curvature and tunnel properties of current index
                 grad = self.points.iloc[i]['Gradient [permil]']/1e3
                 gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil/m]"]/1e3
                 curv = self.points.iloc[i]['Curvature [1/m]']
