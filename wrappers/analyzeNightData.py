@@ -113,10 +113,9 @@ if __name__ == '__main__':
     plt.show()
 
 
-    targetDf = df[["Time [s]", "Odometry [m]", "Velocity [m/s]", "Force (el) [N]"]].copy()
+    targetDf = df[["Time [s]", "Velocity [m/s]", "Force (el) [N]"]].copy()
 
     targetDf["Time [s]"] = pd.to_numeric(targetDf["Time [s]"], errors="coerce")
-    targetDf["Odometry [m]"] = pd.to_numeric(targetDf["Odometry [m]"], errors="coerce")
     targetDf["Velocity [m/s]"] = pd.to_numeric(targetDf["Velocity [m/s]"], errors="coerce")
     targetDf["Force (el) [N]"] = pd.to_numeric(targetDf["Force (el) [N]"], errors="coerce")
 
@@ -187,8 +186,8 @@ if __name__ == '__main__':
     ocpEnergyNoETCS = stats["Cost"]
     ocpEnergyWithETCS = statsEtcs["Cost"]
     realEnergy = energyStats["Net energy used [kWh]"]
-    print(f"ocpEnergy: {ocpEnergyNoETCS:.2f} kWh")
-    print(f"realEnergy: {realEnergy:.2f} kWh")
+    print(f"ocpEnergy (no ETCS): {ocpEnergyNoETCS:.2f} kWh")
+    print(f"realEnergy (with ETCS): {realEnergy:.2f} kWh")
 
     relativeEnergyDifference = (realEnergy - ocpEnergyNoETCS) / ocpEnergyNoETCS
     print(f"Relative energy difference (no ETCS): {relativeEnergyDifference * 100:.2f} %")

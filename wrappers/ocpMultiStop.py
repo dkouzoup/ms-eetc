@@ -2,6 +2,8 @@ import pickle
 from math import floor
 from pathlib import Path
 
+import pandas as pd
+
 from mseetc.ocp import casadiSolver
 from simulations.sim_launcher import get_power_loss_function
 
@@ -59,11 +61,15 @@ if __name__ == '__main__':
         solver = casadiSolver(train, track, journey, opts)
         df, stats = solver.solve()
 
-        sectionDirectory = ocpDirectory / f"df_section_{sectionIdx}.pkl"
-        df.to_pickle(sectionDirectory)
-        energyResults.append(stats["Cost"])
+        sectionFile = ocpDirectory / f"df_section_{sectionIdx}.pkl"
+        df.to_pickle(sectionFile)
+
+        energyResults.append({
+            "File": f"section_{sectionIdx}",
+            "Energy [kWh]": stats["Cost"]
+        })
 
 
-    energyFile = ocpDirectory / "energyStats.pkl"
-    with open(energyFile, "wb") as file:
-        pickle.dump(energyResults, file)
+    energyFile = ocpDirectory / "energyStats.csv"
+    energyResultsDf = pd.DataFrame(energyResults)
+    energyResultsDf.to_csv(energyFile, index=False)
