@@ -187,7 +187,8 @@ if __name__ == '__main__':
     ocpEnergyWithETCS = statsEtcs["Cost"]
     realEnergy = energyStats["Net energy used [kWh]"]
     print(f"ocpEnergy (no ETCS): {ocpEnergyNoETCS:.2f} kWh")
-    print(f"realEnergy (with ETCS): {realEnergy:.2f} kWh")
+    print(f"ocpEnergy (with ETCS): {ocpEnergyWithETCS:.2f} kWh")
+    print(f"realEnergy: {realEnergy:.2f} kWh")
 
     relativeEnergyDifference = (realEnergy - ocpEnergyNoETCS) / ocpEnergyNoETCS
     print(f"Relative energy difference (no ETCS): {relativeEnergyDifference * 100:.2f} %")
