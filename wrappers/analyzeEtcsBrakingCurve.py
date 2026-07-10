@@ -14,21 +14,21 @@ if __name__ == '__main__':
             position=5000,
             overlap= 100,
             permittedVelocity=140/3.6,
-            targetVelocity=0
+            targetVelocity=40/3.6
     )
 
-    addConstantVelocitySections = True
+    addConstantVelocitySections = False
 
     calculator = EtcsBrakingCurveCalculator(train, track, distancePre=5000, distancePost=1000)
     curve_set, interventionPoints = calculator.computeTarget(target)
 
     calculator.printInterventionPoints(interventionPoints)
 
-    # if addConstantVelocitySections:
-    #
-    #     curve_set = calculator.processCurvesBeforeTarget(curve_set, target)
-    #
-    #     if target.targetVelocity > 0:
-    #         curve_set = calculator.processCurvesAfterTarget(curve_set, target)
+    if addConstantVelocitySections:
+
+        curve_set = calculator.processCurvesBeforeTarget(curve_set, target)
+
+        if target.targetVelocity > 0:
+            curve_set = calculator.processCurvesAfterTarget(curve_set, target)
 
     calculator.plotCurves(curve_set, target)

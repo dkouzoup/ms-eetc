@@ -6,6 +6,10 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 
+MIN_VELOCITY = 0  # [m/s]
+DISTANCE_TO_EOA_AT_STATION = 15  # [m/s]
+
+
 def getTrackVelocityAtPositions(speedLimitPositions, speedLimits, positions):
     """
     Return stepwise track speed limit at given positions.
@@ -24,8 +28,8 @@ def getBrakingTargetsFromSpeedLimits(track):
     speedLimits = track.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
 
     # Add final stop target at end of track
-    speedLimitPositions = np.append(speedLimitPositions, track.length)
-    speedLimits = np.append(speedLimits, 0.0)
+    speedLimitPositions = np.append(speedLimitPositions, track.length+DISTANCE_TO_EOA_AT_STATION)  # train usually stops a bit before EoA
+    speedLimits = np.append(speedLimits, MIN_VELOCITY)
 
     v_max = max(speedLimits)
 
@@ -41,7 +45,7 @@ def getBrakingTargetsFromSpeedLimits(track):
                 position=speedLimitPositions[idx],
                 overlap=100,
                 permittedVelocity=v_max,
-                targetVelocity=speedLimits[idx],
+                targetVelocity=max(speedLimits[idx], MIN_VELOCITY),
                 )
             )
 
@@ -246,11 +250,11 @@ class EtcsBrakingCurveCalculator:
         if not 0 <= target.permittedVelocity < 400 / 3.6:
             raise ValueError("permittedVelocity must be between 0 and 400 km/h.")
 
-        if not 0 < target.EoA <= self.track.length:
-            raise ValueError("EoA must lie within the track length.")
+        if not 0 < target.EoA:
+            raise ValueError("EoA must be positive.")
 
-        if not 0 < target.SvL <= self.track.length + target.overlap:
-            raise ValueError("SvL must lie within the track length.")
+        if not 0 < target.SvL:
+            raise ValueError("SvL must be positive.")
 
         if not 0 <= target.targetVelocity < target.permittedVelocity:
             raise ValueError("targetVelocity must be lower than permittedVelocity.")
