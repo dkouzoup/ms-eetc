@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 
 from mseetc.train import *
 
@@ -282,9 +283,18 @@ class casadiSolver():
             speedLimit = self.points.iloc[i]['Speed limit [m/s]']
             speedLimit = min(speedLimit, velocityMax)
 
-            if i > 0:
+            count = 1
 
-                speedLimit = min(speedLimit, self.points.iloc[i-1]['Speed limit [m/s]'])  # do not accelerate before speed limit increase
+            while i - count >= 0:
+
+                previous_speed_limit = self.points.iloc[i - count]["Speed limit [m/s]"]
+
+                if previous_speed_limit >= speedLimit:
+
+                    break
+
+                speedLimit = previous_speed_limit  # do not accelerate before speed limit increase
+                count += 1
 
             timeLower = self.initialTime
             timeUpper = self.terminalTime

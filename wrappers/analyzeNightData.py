@@ -200,8 +200,34 @@ if __name__ == '__main__':
     ax.plot((targetDf["Position [m]"].to_numpy()-targetDf["Position [m]"].to_numpy()[0]) * 0.001, targetDf["Velocity [m/s]"].to_numpy() * 3.6, label="real Trip")
     ax.plot(df["Position [m]"].to_numpy()*0.001, df["Velocity [m/s]"].to_numpy()*3.6, label="OCP (no Etcs)")
     ax.plot(dfEtcs["Position [m]"].to_numpy()*0.001, dfEtcs["Velocity [m/s]"].to_numpy()*3.6, label="OCP (with Etcs)")
+
+    x = track.speedLimits.index.to_numpy(dtype=float)
+    v = track.speedLimits["Speed limit [m/s]"].to_numpy(dtype=float)
+    x_plot = np.append(x, track.length)
+    v_plot = np.append(v, v[-1])
+
+    ax.step(x_plot*0.001, v_plot*3.6, where="post", color="black", linestyle="-", label="Track Speed Limit")
+    ax.plot(track.etcsPositions*0.001, track.etcsVelocities*3.6, color="red", linestyle="-", label="ETCS Speed Limit")
+
     ax.set_title("Comparison: Velocity")
     ax.set_xlabel("Position [km]")
+    ax.set_ylabel("Velocity [km/h]")
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right")
+
+    ax.set_xlim(df["Position [m]"].to_numpy()[0]*0.001, df["Position [m]"].to_numpy()[-1]*0.001)
+
+    ax.figure.tight_layout()
+
+    plt.show()
+
+
+    fig5, ax = plt.subplots(figsize=(18, 12))
+    ax.plot((targetDf.index.to_numpy()-targetDf.index.to_numpy()[0])/60, targetDf["Velocity [m/s]"].to_numpy() * 3.6, label="real Trip")
+    ax.plot(df.index.to_numpy()/60, df["Velocity [m/s]"].to_numpy()*3.6, label="OCP (no Etcs)")
+    ax.plot(dfEtcs.index.to_numpy()/60, dfEtcs["Velocity [m/s]"].to_numpy()*3.6, label="OCP (with Etcs)")
+    ax.set_title("Comparison: Velocity")
+    ax.set_xlabel("Time [min]")
     ax.set_ylabel("Velocity [km/h]")
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
     ax.legend(loc="upper right")
