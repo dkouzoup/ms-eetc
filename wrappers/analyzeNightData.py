@@ -10,7 +10,21 @@ from mseetc.track import Track
 from mseetc.train import Train
 from simulations.sim_launcher import get_power_loss_function, printStats
 
+
 if __name__ == '__main__':
+    """
+    Analyze Night Data and Validate Estimation and Optimization Pipeline
+    1. Import data
+    2. Compare different position data sources (odometry, position and velocity integration)
+    3. Alignment of track position data and train position measurement using gradient alignment
+    4. Estimate force profile given odometry
+    5. Estimate energy give force profile and odometry
+    6. Compute optimal trajectory (with and without ETCS)
+    7. Compare optimal trajectory with real trajectory (energy consumption and velocity profiles)
+    """
+
+
+    ### 1. Import Data
 
     df = pd.read_csv("../nightTests/journey1_odometry.csv")
 
@@ -21,24 +35,30 @@ if __name__ == '__main__':
     forces = df['Force (el) [N]'].to_numpy()
     gradients = df['Gradient [-]'].to_numpy()
 
+    # set startpoint of the journey to position = 0 m and start time = 0s
+
     times = times - times[0]
     positions = positions - positions[0]
     odometry = odometry - odometry[0]
 
-    computedPositions = np.zeros_like(positions)
-    computedPositions[0] = positions[0]
+
+    ### 2. Compare different position data sources (odometry, position and velocity integration)
+
+    # compute position based on velocity
+
+    positionBasedOnVelocity = np.zeros_like(positions)
+    positionBasedOnVelocity[0] = positions[0]
     dt = np.diff(times)
     vMean = (velocities[:-1] + velocities[1:]) / 2
-    computedPositions[1:] = positions[0] + np.cumsum(vMean * dt)
+    positionBasedOnVelocity[1:] = positions[0] + np.cumsum(vMean * dt)
 
-
-    ### Plot Odometry Difference
+    # Fig 1.: Position Data Source Comparison
 
     fig, ax = plt.subplots(figsize=(18, 12))
     ax.plot(times/60, positions, label="Position")
     ax.plot(times/60, odometry, label="Odometry")
-    ax.plot(times/60, computedPositions, label="Velocity Integration")
-    ax.set_title("Comparison: Positon vs Odometry")
+    ax.plot(times / 60, positionBasedOnVelocity, label="Velocity Integration")
+    ax.set_title("Fig 1.: Position Data Source Comparison")
     ax.set_ylabel("Position [m]")
     ax.set_xlabel("Time [min]")
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
@@ -49,17 +69,18 @@ if __name__ == '__main__':
     plt.show()
 
     relativeEndPositionDifference = (odometry[-1] - positions[-1]) / positions[-1]
-    print(f"Relative end position difference for Odometry: {relativeEndPositionDifference * 100:.2f} %")
+    print(f"Relative end position difference for Odometry vs Position: {relativeEndPositionDifference * 100:.2f} %")
 
-    relativeEndPositionDifference = (computedPositions[-1] - positions[-1]) / positions[-1]
-    print(f"Relative end position difference for Velocity Integration: {relativeEndPositionDifference * 100:.2f} %")
+    relativeEndPositionDifference = (positionBasedOnVelocity[-1] - positions[-1]) / positions[-1]
+    print(f"Relative end position difference for Velocity Integration vs Position: {relativeEndPositionDifference * 100:.2f} %")
 
-    relativeEndPositionDifference = (computedPositions[-1] - odometry[-1]) / odometry[-1]
+    relativeEndPositionDifference = (positionBasedOnVelocity[-1] - odometry[-1]) / odometry[-1]
     print(f"Relative end position difference for Velocity Integration vs Odometry: {relativeEndPositionDifference * 100:.2f} %")
 
 
-    ### Gradient Difference
+    ### 3. Alignment of Track Position Data and Train Position Measurement using Gradient Alignment
 
+    # manual tuning parameters
     startPosition = 337
     positionMultiplier = 1.006
 
@@ -75,10 +96,12 @@ if __name__ == '__main__':
     gradMeasurementPositions = gradMeasurementPositionsScaled
     gradMeasurementValues = gradients*1000
 
+    # Fig 2.: Gradient Alignment
+
     fig2, ax = plt.subplots(figsize=(18, 12))
     ax.step(gradMeasurementPositions, gradMeasurementValues, where="post", label="Measurements")
     ax.step(gradTrackPositions, gradTrackValues, where="post", label="Track Data")
-    ax.set_title("Comparison: Gradients")
+    ax.set_title("Fig 2.: Alignment of Track Position Data and Train Position Measurement using Gradient Alignment")
     ax.set_xlabel("Position [m]")
     ax.set_ylabel("Gradient [permil]")
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
@@ -89,7 +112,7 @@ if __name__ == '__main__':
     plt.show()
 
 
-    ### Estimate Force Profile given Odometry
+    ### 4. Estimate Force Profile given Odometry
 
     train = Train(config={'id':'trainNight'}, pathJSON='../nightTests')
     train.forceMinPn = 0
@@ -99,10 +122,12 @@ if __name__ == '__main__':
     track = Track(config={'id':'trackNight'}, pathJSON='../nightTests')
     track.updateTrainLengthDependentValues(train)
 
+    # Fig 3.: Using Gradient Alignment to align Track Position Data and Train Position Measurement for train-length-dependent values
+
     fig3, ax = plt.subplots(figsize=(18, 12))
     ax.step(gradMeasurementPositions + train.length*0.5, gradMeasurementValues, where="post", label="Measurements")
     ax.step(track.gradients.index.to_numpy(), track.gradients["Gradient [permil]"].to_numpy(), where="post", label="Track Data Train-length-dependent")
-    ax.set_title("Comparison: Gradients")
+    ax.set_title("Fig 3.: Using Gradient Alignment to align Track Position Data and Train Position Measurement for train-length-dependent values")
     ax.set_xlabel("Position [m]")
     ax.set_ylabel("Gradient [permil]")
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
@@ -112,6 +137,7 @@ if __name__ == '__main__':
 
     plt.show()
 
+    # prepare input data for forceEstimator: targetDf
 
     targetDf = df[["Time [s]", "Velocity [m/s]", "Force (el) [N]"]].copy()
 
@@ -119,34 +145,37 @@ if __name__ == '__main__':
     targetDf["Velocity [m/s]"] = pd.to_numeric(targetDf["Velocity [m/s]"], errors="coerce")
     targetDf["Force (el) [N]"] = pd.to_numeric(targetDf["Force (el) [N]"], errors="coerce")
 
-    targetDf["Time [s]"] = targetDf["Time [s]"] - targetDf["Time [s]"].iloc[0]
-    targetDf["Position [m]"] = gradMeasurementPositions + train.length*0.5
-
-    targetDf = targetDf[["Time [s]", "Position [m]", "Velocity [m/s]", "Force (el) [N]"]]
+    targetDf["Time [s]"] = targetDf["Time [s]"] - targetDf["Time [s]"].iloc[0]  # set startTime to 0s
+    targetDf["Position [m]"] = gradMeasurementPositions + train.length*0.5  # use the correct train-length-dependent position
 
     targetDf = targetDf.dropna()
     targetDf = targetDf.sort_values("Time [s]")
     targetDf = targetDf.set_index("Time [s]")
     targetDf.index.name = None
 
-    targetDf = targetDf[~targetDf.index.duplicated(keep="first")]
-    targetDf = targetDf[targetDf["Position [m]"].diff().fillna(1) > 0]
+    targetDf = targetDf[~targetDf.index.duplicated(keep="first")]  # needs strictly monotone increasing times
+    targetDf = targetDf[targetDf["Position [m]"].diff().fillna(1) > 0]  # needs strictly monotone increasing positions
 
     optsDict = {'numIntervals': 500, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1}, 'energyOptimal': True}
 
     fEstimator = forceEstimator(targetDf, train, track, optsDict=optsDict, trainLengthDependentValues=True)
     dfEstimate = fEstimator.estimate()
 
+    # visual validation of estimation
+
     plotVelocityComparison(targetDf, dfEstimate)
     plotForceComparison(targetDf, dfEstimate)
     plotTimeCoparison(targetDf, dfEstimate)
+
+
+    ### 5. Estimate Energy give Force Profile and Odometry
 
     eEstimator = energyEstimator(dfEstimate, train, track=track, optsDict=optsDict)
     energyStats = eEstimator.estimate()
     eEstimator.printStats(energyStats)
 
 
-    ### compute optimal Trajectory
+    ### 6. Compute optimal Trajectory
 
     train.powerLosses = get_power_loss_function(train, "static")  # perfect
 
@@ -158,7 +187,7 @@ if __name__ == '__main__':
     print(f"End position: {end:.1f} m")
     print(f"Duration: {duration:.1f} s")
 
-    journey = Journey(config={'id':'trackNight_journey01'}, sectionIdx=0, pathJSON='../nightTests')
+    journey = Journey(config={'id':'trackNight_journey01'}, sectionIdx=0, pathJSON='../nightTests')  # journey file contains the previously printed journey data
 
     track = Track(config={'id':'trackNight'}, pathJSON='../nightTests')
     track.updateTrainLengthDependentValues(train)
@@ -181,7 +210,9 @@ if __name__ == '__main__':
     printStats(dfEtcs, statsEtcs, solverEtcs, train)
 
 
-    ### compare optimal Trajectory with real trajectory
+    ### 7. compare optimal Trajectory with real trajectory
+
+    # compare energy use
 
     ocpEnergyNoETCS = stats["Cost"]
     ocpEnergyWithETCS = statsEtcs["Cost"]
@@ -195,6 +226,7 @@ if __name__ == '__main__':
     relativeEnergyDifference = (realEnergy - ocpEnergyWithETCS) / ocpEnergyWithETCS
     print(f"Relative energy difference (with ETCS): {relativeEnergyDifference * 100:.2f} %")
 
+    # compare velocity profile in space domain
 
     fig4, ax = plt.subplots(figsize=(18, 12))
     ax.plot((targetDf["Position [m]"].to_numpy()-targetDf["Position [m]"].to_numpy()[0]) * 0.001, targetDf["Velocity [m/s]"].to_numpy() * 3.6, label="real Trip")
@@ -209,7 +241,7 @@ if __name__ == '__main__':
     ax.step(x_plot*0.001, v_plot*3.6, where="post", color="black", linestyle="-", label="Track Speed Limit")
     ax.plot(track.etcsPositions*0.001, track.etcsVelocities*3.6, color="red", linestyle="-", label="ETCS Speed Limit")
 
-    ax.set_title("Comparison: Velocity")
+    ax.set_title("Fig 4.: Velocity Profile Comparison for Simulated and Real Trajectories w.r.t. Space")
     ax.set_xlabel("Position [km]")
     ax.set_ylabel("Velocity [km/h]")
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
@@ -221,12 +253,13 @@ if __name__ == '__main__':
 
     plt.show()
 
+    # compare velocity profile in time domain
 
     fig5, ax = plt.subplots(figsize=(18, 12))
     ax.plot((targetDf.index.to_numpy()-targetDf.index.to_numpy()[0])/60, targetDf["Velocity [m/s]"].to_numpy() * 3.6, label="real Trip")
     ax.plot(df.index.to_numpy()/60, df["Velocity [m/s]"].to_numpy()*3.6, label="OCP (no Etcs)")
     ax.plot(dfEtcs.index.to_numpy()/60, dfEtcs["Velocity [m/s]"].to_numpy()*3.6, label="OCP (with Etcs)")
-    ax.set_title("Comparison: Velocity")
+    ax.set_title("Fig 5.: Velocity Profile Comparison for Simulated and Real Trajectories w.r.t. Time")
     ax.set_xlabel("Time [min]")
     ax.set_ylabel("Velocity [km/h]")
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
