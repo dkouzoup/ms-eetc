@@ -24,12 +24,14 @@ def getTargetDf(file, trainLength):
 
     targetDf["Time [s]"] = targetDf["Time [s]"] - targetDf["Time [s]"].iloc[0]  # set start time to 0
 
+    # linearly scale position measurements to account for integration drift in the measurement data
     positions = df['Odometry [m]'].to_numpy() + startPosition
     positionSteps = positionMultiplier * np.diff(positions)
     positionsScaled = np.zeros_like(positions)
     positionsScaled[0] = positions[0]
     positionsScaled[1:] = positions[0] + np.cumsum(positionSteps)
 
+    # account for train-length-dependent values
     targetDf["Position [m]"] = positionsScaled + trainLength * 0.5
 
     targetDf = targetDf.dropna()
@@ -37,14 +39,31 @@ def getTargetDf(file, trainLength):
     targetDf = targetDf.set_index("Time [s]")
     targetDf.index.name = None
 
-    targetDf = targetDf[~targetDf.index.duplicated(keep="first")]
-    targetDf = targetDf[targetDf["Position [m]"].diff().fillna(1) > 0]
+    targetDf = targetDf[~targetDf.index.duplicated(keep="first")]  # needs strictly monotone increasing times
+    targetDf = targetDf[targetDf["Position [m]"].diff().fillna(1) > 0]  # needs strictly monotone increasing positions
 
     return targetDf
 
 
-
 if __name__ == '__main__':
+
+    """
+    Estimate energy consumption for multiple journey sections.
+    
+    Each journey section must be specified in a single csv file.
+    Each csv file must have the following columns:
+        - "Time [s]"
+        - "Velocity [m/s]
+        - "Odometry [m]
+    All csv files must be saved in the same input folder (directory).
+    
+    Only make changes in the "Input" section of this script.
+    
+    Results are saved in a new directory called "estimator" located in the input folder (directory).
+    Per journey section the resulting estimated trajectory is saved in a pickle file - 
+    one for the force and one for the energy estimation.
+    For easy data access, estimated energy consumption per section is saved in a csv file.
+    """
 
     from mseetc.train import Train
     from mseetc.track import Track
@@ -79,6 +98,7 @@ if __name__ == '__main__':
         track = Track(config={'id': trackId}, pathJSON=directory)
         track.updateTrainLengthDependentValues(train)
 
+        # automatic assignment of shooting node count
         numOfIntervals = floor((targetDf["Position [m]"].to_numpy()[-1] - targetDf["Position [m]"].to_numpy()[0]) * INTERVALS_PER_METER)
         print(f"numOfIntervals: {numOfIntervals}")
 

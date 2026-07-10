@@ -1,6 +1,10 @@
 from mseetc.etcs import BrakingTarget, EtcsBrakingCurveCalculator
 
+
 if __name__ == '__main__':
+    """
+    Simple tool to plot etcs braking curves for a single speed decrease.
+    """
 
     from mseetc.track import Track
     from mseetc.train import Train

@@ -13,6 +13,14 @@ INTERVALS_PER_METER = 300/4000
 
 if __name__ == '__main__':
 
+    """
+    Compute energy optimal trajectory for a multi-stop-journey
+    Only make changes in the "Input" section.
+    Results are saved in a new directory called "ocp" located in the input folder.
+    Per journey section the resulting optimized trajectory is saved in a pickle file.
+    For easy data access, energy consumption per section is saved in a csv file.
+    """
+
     from mseetc.train import Train
     from mseetc.track import Track
     from mseetc.journey import Journey
@@ -41,11 +49,14 @@ if __name__ == '__main__':
     # Journey
 
     journey = Journey(config={'id':journeyId}, pathJSON=directory)
-    numOfJounreySections = len(journey.journeySectionBounds)
+    numOfJourneySections = len(journey.journeySectionBounds)
 
 
-    energyResults = []
-    for sectionIdx in range(numOfJounreySections):
+    energyResults = []  # result data container
+
+    for sectionIdx in range(numOfJourneySections):
+
+        # new ocp per journey section
 
         journey = Journey(config={'id': journeyId}, sectionIdx=sectionIdx, pathJSON=directory)
 
@@ -53,7 +64,7 @@ if __name__ == '__main__':
         track.updateTrainLengthDependentValues(train)
         track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
-        numOfIntervals = floor((journey.positionEnd - journey.positionStart) * INTERVALS_PER_METER)
+        numOfIntervals = floor((journey.positionEnd - journey.positionStart) * INTERVALS_PER_METER)  # automatic assignment of shooting node count
         print(f"numOfIntervals: {numOfIntervals}")
 
         opts = {'numIntervals': numOfIntervals, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 1},
@@ -70,6 +81,7 @@ if __name__ == '__main__':
         })
 
 
+    # save energy consumption per sections in a csv file
     energyFile = ocpDirectory / "energyStats.csv"
     energyResultsDf = pd.DataFrame(energyResults)
     energyResultsDf.to_csv(energyFile, index=False)
