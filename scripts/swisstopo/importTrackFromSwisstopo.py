@@ -4,6 +4,50 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+DEFAULT_SPACING = 10  # [m]
+DEFAULT_SMOOTHINGWINDOW = 11  # [m]
+
+def computeCurvature(df, spacing=DEFAULT_SPACING, smoothingWindow=DEFAULT_SMOOTHINGWINDOW):
+
+    measuredPositions = df["Total_Distance"].to_numpy(dtype=float)
+    eastings = df["Easting"].to_numpy(dtype=float)
+    northings = df["Northing"].to_numpy(dtype=float)
+
+
+    ### Interpolate to equally spaced positions
+
+    positions = np.arange(measuredPositions[0], measuredPositions[-1] + spacing, spacing)
+
+    eastings = np.interp(positions, measuredPositions, eastings)
+    northings = np.interp(positions, measuredPositions, northings)
+
+
+    ### Smooth coordinates
+
+    eastings = pd.Series(eastings).rolling(window=smoothingWindow, center=True, min_periods=1).mean().to_numpy()
+    northings = pd.Series(northings).rolling(window=smoothingWindow, center=True, min_periods=1).mean().to_numpy()
+
+
+    ### Compute curvature
+
+    dx = np.gradient(eastings, positions)
+    dy = np.gradient(northings, positions)
+
+    ddx = np.gradient(dx, positions)
+    ddy = np.gradient(dy, positions)
+
+    denominator = (dx**2 + dy**2)**1.5
+
+    curvature = np.divide(dx * ddy - dy * ddx, denominator, out=np.zeros_like(denominator), where=denominator > 1e-12)
+
+
+    ### Interpolate curvature to measured positions
+
+    curvatures = np.interp(measuredPositions, positions, curvature)
+
+    return curvatures
+
+
 if __name__ == '__main__':
 
     """
@@ -19,7 +63,7 @@ if __name__ == '__main__':
     ### Input
     csvInputfilePath = r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks\swisstopo\Track_StGallen_Wil.csv"
 
-    outputDirectory = Path(r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks")
+    outputDirectory = Path(r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks\swisstopo")
     outputTrackId = "CH_StGallen_Wil_Swisstopo"
     author = "Roland Staerk"
 
@@ -81,6 +125,15 @@ if __name__ == '__main__':
     gradientPerMille = np.round(gradientPerMille, 1)
 
 
+    ### Curvature
+
+    curvatures = computeCurvature(df)
+    validCurvature = np.abs(curvatures) > 1e-12
+
+    radii = np.full(curvatures.shape, "infinity", dtype=object)
+    radii[validCurvature] = 1 / curvatures[validCurvature]
+
+
     ### Parse to Json
 
     output_path = outputDirectory / f"{outputTrackId}.json"
@@ -101,6 +154,11 @@ if __name__ == '__main__':
     gradients = [
         [float(pos), float(grad)]
         for pos, grad in zip(positions, gradientPerMille)
+    ]
+
+    curvatures = [
+        [float(pos), float(radiusStart) if radiusStart != "infinity" else "infinity", float(radiusEnd) if radiusEnd != "infinity" else "infinity"]
+        for pos, radiusStart, radiusEnd in zip(positions, radii, radii)
     ]
 
     track_data = {
@@ -131,6 +189,14 @@ if __name__ == '__main__':
                 "slope": "permil"
             },
             "values": gradients
+        },
+        "curvatures": {
+            "units": {
+                "position": "m",
+                "radius at start": "m",
+                "radius at end": "m"
+            },
+            "values": curvatures
         }
     }
 

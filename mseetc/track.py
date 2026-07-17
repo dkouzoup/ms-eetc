@@ -441,6 +441,9 @@ class Track():
         tuples = self.sampleClothoid(tuples, clothoidSamplingInterval)
 
         self.curvatures = importTuples(tuples, 'Position [m]', ['Curvature [1/m]'])
+
+        self.curvaturesSigned = self.curvatures.copy()
+
         self.curvatures["Curvature [1/m]"] = self.curvatures["Curvature [1/m]"].abs()
 
         checkDataFrame(self.curvatures, self.length)
