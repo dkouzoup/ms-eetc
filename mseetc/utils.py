@@ -10,6 +10,8 @@ from distutils.spawn import find_executable
 import pandas as pd
 from matplotlib import pyplot as plt
 
+from mseetc.efficiency import totalLossesFunction
+
 
 def var(tag, dim=None):
     "Wrapper to create symbolic variables in casadi."
@@ -694,6 +696,40 @@ def introduceSufficientShootingNodesForETCSBrakingCurves(track, existingPoints):
 def isSet( value):
 
     return value is not None and not pd.isna(value)
+
+
+def get_power_loss_function(train, mode="perfect",* ,auxiliaries: float = 27_000, eta_gear: float = 0.96):
+
+    if mode == "perfect":
+
+        return lambda f, v: 0
+
+    elif mode == "static":
+
+        return lambda f, v: (f>0)*f*v*(1-train.etaTraction)/train.etaTraction - (f<0)*f*v*(1-train.etaRgBrake)
+
+    elif mode == "dynamic":
+
+        return totalLossesFunction(train, auxiliaries=auxiliaries, etaGear=eta_gear)
+
+    else:
+
+        raise ValueError("mode must be one of: 'perfect', 'static', 'dynamic'")
+
+
+def printStats(df, stats, solver, train):
+
+    if df is not None:
+
+        print("")
+        print("Objective value = {:.2f} {}".format(stats['Cost'], 'kWh' if solver.opts.energyOptimal else 's'))
+        print("")
+        print("Maximum acceleration: {:5.2f}, with bound {}".format(df.max()['Acceleration [m/s^2]'], train.accMax if train.accMax is not None else 'None'))
+        print("Maximum deceleration: {:5.2f}, with bound {}".format(df.min()['Acceleration [m/s^2]'],train.accMin if train.accMin is not None else 'None'))
+
+    else:
+
+        print("Solver failed!")
 
 
 if __name__ == '__main__':

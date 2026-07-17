@@ -5,8 +5,7 @@ import numpy as np
 import pandas as pd
 
 from mseetc.estimator import forceEstimator, energyEstimator
-from simulations.sim_launcher import get_power_loss_function
-
+from mseetc.utils import get_power_loss_function
 
 INTERVALS_PER_METER = 400/3000
 

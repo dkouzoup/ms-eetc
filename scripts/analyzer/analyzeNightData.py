@@ -8,10 +8,10 @@ from mseetc.journey import Journey
 from mseetc.ocp import casadiSolver
 from mseetc.track import Track
 from mseetc.train import Train
-from simulations.sim_launcher import get_power_loss_function, printStats
-
+from mseetc.utils import get_power_loss_function, printStats
 
 if __name__ == '__main__':
+
     """
     Analyze Night Data and Validate Estimation and Optimization Pipeline
     1. Import data
@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     ### 1. Import Data
 
-    df = pd.read_csv("../nightTests/journey1_odometry.csv")
+    df = pd.read_csv("../../nightTests/journey1_odometry.csv")
 
     times = df['Time [s]'].to_numpy()
     positions = df['Position [m]'].to_numpy()
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     startPosition = 337
     positionMultiplier = 1.006
 
-    track = Track(config={'id': 'trackNight'}, pathJSON='../nightTests')
+    track = Track(config={'id': 'trackNight'}, pathJSON='../../nightTests')
     gradTrackPositions = track.gradients.index.to_numpy()
     gradTrackValues = track.gradients["Gradient [permil]"].to_numpy()
 
@@ -114,12 +114,12 @@ if __name__ == '__main__':
 
     ### 4. Estimate Force Profile given Odometry
 
-    train = Train(config={'id':'trainNight'}, pathJSON='../nightTests')
+    train = Train(config={'id':'trainNight'}, pathJSON='../../nightTests')
     train.forceMinPn = 0
     train.withPnBrake = False
     train.powerLosses = get_power_loss_function(train, "static")
 
-    track = Track(config={'id':'trackNight'}, pathJSON='../nightTests')
+    track = Track(config={'id':'trackNight'}, pathJSON='../../nightTests')
     track.updateTrainLengthDependentValues(train)
 
     # Fig 3.: Using Gradient Alignment to align Track Position Data and Train Position Measurement for train-length-dependent values
@@ -187,9 +187,9 @@ if __name__ == '__main__':
     print(f"End position: {end:.1f} m")
     print(f"Duration: {duration:.1f} s")
 
-    journey = Journey(config={'id':'trackNight_journey01'}, sectionIdx=0, pathJSON='../nightTests')  # journey file contains the previously printed journey data
+    journey = Journey(config={'id':'trackNight_journey01'}, sectionIdx=0, pathJSON='../../nightTests')  # journey file contains the previously printed journey data
 
-    track = Track(config={'id':'trackNight'}, pathJSON='../nightTests')
+    track = Track(config={'id':'trackNight'}, pathJSON='../../nightTests')
     track.updateTrainLengthDependentValues(train)
     track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 

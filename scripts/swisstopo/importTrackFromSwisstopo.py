@@ -6,18 +6,57 @@ import pandas as pd
 
 if __name__ == '__main__':
 
+    """
+    Convert Swisstopo CSV track data into a TTOBench-compatible JSON file.
+
+    The script validates the required columns and initial speed limit,
+    extracts the speed profile, computes smoothed gradients from altitude data,
+    and saves the resulting track definition json.
+    """
+
+
+    ####################################################################################################################
+    ### Input
+    csvInputfilePath = r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks\swisstopo\Track_StGallen_Wil.csv"
+
+    outputDirectory = Path(r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks")
+    outputTrackId = "CH_StGallen_Wil_Swisstopo"
+    author = "Roland Staerk"
+
+    ####################################################################################################################
+
 
     ### Read CSV
 
-    filePath = r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks\swisstopo\Track_StGallen_Wil.csv"
-
-    df = pd.read_csv(filePath,na_values=["<null>", "null", ""])
+    df = pd.read_csv(csvInputfilePath, na_values=["<null>", "null", ""])
 
     print(df.head())
     print(df.dtypes)
 
+    requiredColumns = {
+        "Total_Distance",
+        "Distance",
+        "Altitude",
+        "Easting",
+        "Northing",
+        "Longitude",
+        "Latitude",
+        "V_max"
+    }
+
+    missingColumns = requiredColumns - set(df.columns)
+
+    assert not missingColumns, (
+        f"Input CSV is missing the following required columns: "
+        f"{sorted(missingColumns)}"
+    )
+
 
     ### Speed limits
+
+    assert pd.notna(df["V_max"].iloc[0]) and df["V_max"].iloc[0] > 0, (
+        "The first entry in column 'V_max' must be a valid value greater than 0."
+    )
 
     speedProfile = df.loc[
         df["V_max"].notna(),
@@ -44,13 +83,7 @@ if __name__ == '__main__':
 
     ### Parse to Json
 
-    track_id = "CH_StGallen_Wil_Swisstopo"
-    author = "Roland Staerk"
-
-    name = "CH_StGallen_Wil_Swisstopo"
-
-    output_dir = Path(r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks\swisstopo")
-    output_path = output_dir / f"{name}.json"
+    output_path = outputDirectory / f"{outputTrackId}.json"
 
     stops = [
         0.0,
@@ -72,7 +105,7 @@ if __name__ == '__main__':
 
     track_data = {
         "metadata": {
-            "id": track_id,
+            "id": outputTrackId,
             "created by": author,
             "library version": "TTOBench v1.4",
             "license": "BSD 2-Clause License"

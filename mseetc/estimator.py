@@ -5,8 +5,7 @@ from matplotlib import pyplot as plt
 from mseetc.ocp import OptionsCasadiSolver
 from mseetc.track import Track, computeDiscretizationPoints
 from mseetc.train import Train, TrainIntegrator
-from mseetc.utils import computeTunnelFactor
-from simulations.sim_launcher import get_power_loss_function
+from mseetc.utils import computeTunnelFactor, get_power_loss_function
 
 
 class forceEstimator():

@@ -1,16 +1,27 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
+from mseetc.journey import Journey
 from mseetc.ocp import casadiSolver
-from simulations.sim_launcher import get_power_loss_function
+from mseetc.utils import get_power_loss_function
 from mseetc.track import Track
 from mseetc.train import Train
 
 
 if __name__ == '__main__':
 
+    """
+    Compare SBB reference and Swisstopo track data for the St. Gallen–Wil route.
 
-    SBB_track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='')
+    The script compares altitude profiles and speed limits for both track sources.
+    It further solves an energy-optimal OCP for each dataset, and reports the resulting energy-cost difference.
+    It also plots the resulting optimized speed profiles for direct comparison.
+    """
+
+
+    ### SBB Data
+
+    SBB_track = Track(config={'id': 'CH_StGallen_Wil_Reference'}, pathJSON='../../tracks/swisstopo')  # Reference track with no curvature data
 
     SBB_positions = SBB_track.gradients.index.values
     SBB_gradients = SBB_track.gradients["Gradient [permil]"].to_numpy()
@@ -21,7 +32,10 @@ if __name__ == '__main__':
 
     SBB_altitude = np.insert(initial_altitude + np.cumsum(delta_h),0, initial_altitude)
 
-    Topo_track = Track(config={'id': 'CH_StGallen_Wil_Swisstopo'}, pathJSON='')
+
+    ### Swisstopo Data
+
+    Topo_track = Track(config={'id': 'CH_StGallen_Wil_Swisstopo'}, pathJSON='../../tracks/swisstopo')
 
     Topo_positions = Topo_track.gradients.index.values
     Topo_gradients = Topo_track.gradients["Gradient [permil]"].to_numpy()
@@ -32,7 +46,7 @@ if __name__ == '__main__':
 
     Topo_altitude = np.insert(initial_altitude + np.cumsum(delta_h),0, initial_altitude)
 
-    shift = 800 # 770
+    shift = 800
 
 
     ### Plot Altitude Comparison
@@ -41,7 +55,7 @@ if __name__ == '__main__':
 
     ax.plot(SBB_positions / 1000, SBB_altitude, label="SBB")
     ax.plot((Topo_positions - shift) / 1000, Topo_altitude, label="Topo")
-    ax.set_title("Altitude Comparison")
+    ax.set_title("Fig 1.: Altitude Comparison")
     ax.set_xlabel("Position [km]")
     ax.set_ylabel("Altitude [m]")
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
@@ -58,7 +72,7 @@ if __name__ == '__main__':
 
     ax2.step(SBB_track.speedLimits.index.values / 1000, SBB_track.speedLimits["Speed limit [m/s]"].to_numpy()*3.6, where="post", label="SBB")
     ax2.step((Topo_track.speedLimits.index.values-shift) / 1000, Topo_track.speedLimits["Speed limit [m/s]"].to_numpy()*3.6, where="post", label="Topo")
-    ax2.set_title("Altitude Comparison")
+    ax2.set_title("Fig 2.: Speedlimit Comparison")
     ax2.set_xlabel("Position [km]")
     ax2.set_ylabel("Velocity [km/h]")
     ax2.grid(True, which="both", linestyle="--", alpha=0.5)
@@ -71,26 +85,39 @@ if __name__ == '__main__':
 
     ### Compute Energy Comparison
 
-    # Timetable
-    startPosition = 0           # [m]
-    endPosition = 23000         # [m]
-    duration = 23000/(80/3.6)   # [s]
-
     train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='../../trains')
     train.forceMinPn = 0
     train.withPnBrake = False
     train.powerLosses = get_power_loss_function(train, "static")
+
+
+    ### OCP SBB Track
+
+    SBB_track.updateTrainLengthDependentValues(train)
+
+    journey_SBB = Journey(config={'id': 'CH_StGallen_Wil_Reference_Journey_SwisstopoComparison'}, sectionIdx=0, pathJSON='../../journeys')
+    SBB_track.updateLimits(positionStart=journey_SBB.positionStart, positionEnd=journey_SBB.positionEnd, unit='m')
+
     opts = {'numIntervals': 1000, 'integrationMethod': 'RK', 'integrationOptions': {'numApproxSteps': 2}, 'energyOptimal': True}
 
-    SBB_track.updateLimits(positionStart=startPosition, positionEnd=endPosition, unit='m')
-    SBB_track.updateTrainLengthDependentValues(train)
-    solver = casadiSolver(train, SBB_track, opts)
-    dfSBB, statsSBB = solver.solve(duration)
+    solver = casadiSolver(train, SBB_track, journey_SBB, opts)
+    dfSBB, statsSBB = solver.solve()
 
-    Topo_track.updateLimits(positionStart=startPosition + shift, positionEnd=endPosition + shift, unit='m')
+
+    ### OCP Swisstopo
+
     Topo_track.updateTrainLengthDependentValues(train)
-    solver = casadiSolver(train, Topo_track, opts)
-    dfTopo, statsTopo = solver.solve(duration)
+
+    journey_Topo = Journey(config={'id': 'CH_StGallen_Wil_Swisstopo_Journey_SwisstopoComparison'}, sectionIdx=0, pathJSON='../../journeys')
+    Topo_track.updateLimits(positionStart=journey_Topo.positionStart, positionEnd=journey_Topo.positionEnd, unit='m')
+
+    # Topo_track.updateLimits(positionStart=startPosition + shift, positionEnd=endPosition + shift, unit='m')
+
+    solver = casadiSolver(train, Topo_track, journey_Topo, opts)
+    dfTopo, statsTopo = solver.solve()
+
+
+    ### Print Stats
 
     print(f"Cost SBB: {statsSBB['Cost']:.2f}")
     print(f"Cost Topo: {statsTopo['Cost']:.2f}")
@@ -104,7 +131,7 @@ if __name__ == '__main__':
 
     ax3.plot(dfSBB["Position [m]"] / 1000, dfSBB["Velocity [m/s]"] * 3.6, label="SBB")
     ax3.plot(dfTopo["Position [m]"] / 1000, dfTopo["Velocity [m/s]"] * 3.6, label="Topo")
-    ax3.set_title("Speed Profile Comparison")
+    ax3.set_title("Fig 3.: Speed Profile Comparison")
     ax3.set_xlabel("Position [km]")
     ax3.set_ylabel("Velocity [km/h]")
     ax3.grid(True, which="both", linestyle="--", alpha=0.5)

@@ -6,7 +6,7 @@ from mseetc.journey import Journey
 from mseetc.ocp import casadiSolver
 from mseetc.track import Track
 from mseetc.train import Train
-from simulations.sim_launcher import get_power_loss_function
+from mseetc.utils import get_power_loss_function
 
 
 class TestETCS(unittest.TestCase):
