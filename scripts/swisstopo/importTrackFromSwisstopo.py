@@ -1,51 +1,76 @@
 import json
 from pathlib import Path
+# from scipy.interpolate import splprep, splev   # todo: problems with np version!
 
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 
-DEFAULT_SPACING = 10  # [m]
-DEFAULT_SMOOTHINGWINDOW = 11  # [m]
+DEFAULT_SPACING = 100  # [m]
 
-def computeCurvature(df, spacing=DEFAULT_SPACING, smoothingWindow=DEFAULT_SMOOTHINGWINDOW):
 
-    measuredPositions = df["Total_Distance"].to_numpy(dtype=float)
+def computeCurvature(df, spacing=DEFAULT_SPACING):
+
+    positions  = df["Total_Distance"].to_numpy(dtype=float)
     eastings = df["Easting"].to_numpy(dtype=float)
     northings = df["Northing"].to_numpy(dtype=float)
 
+    eastings = eastings - eastings[0]
+    northings = northings - northings[0]
 
-    ### Interpolate to equally spaced positions
+    assert np.all(np.diff(positions) > 0), (
+        "Column 'Total_Distance' must be strictly increasing."
+    )
 
-    positions = np.arange(measuredPositions[0], measuredPositions[-1] + spacing, spacing)
+    ### Fit smoothing spline
 
-    eastings = np.interp(positions, measuredPositions, eastings)
-    northings = np.interp(positions, measuredPositions, northings)
+    plotSpacing = 1
+    spline, _ = splprep([eastings, northings], u=positions, k=3, s=1000)
 
+    ### Evaluate smoothing spline
 
-    ### Smooth coordinates
+    fittedPositions = np.arange(positions[0], positions[-1], plotSpacing)
 
-    eastings = pd.Series(eastings).rolling(window=smoothingWindow, center=True, min_periods=1).mean().to_numpy()
-    northings = pd.Series(northings).rolling(window=smoothingWindow, center=True, min_periods=1).mean().to_numpy()
+    fittedPositions = np.append(fittedPositions, positions[-1])
 
+    fittedEastings, fittedNorthings = splev(fittedPositions,spline)
 
-    ### Compute curvature
+    fittedEastings = np.asarray(fittedEastings)
+    fittedNorthings = np.asarray(fittedNorthings)
 
-    dx = np.gradient(eastings, positions)
-    dy = np.gradient(northings, positions)
+    fig, ax = plt.subplots(figsize=(16, 8))
+    ax.plot(eastings, northings, label="OG")
+    ax.plot(fittedEastings, fittedNorthings, label="Fitted")
+    ax.set_title("Fig 1.: Visualize Track Path")
+    ax.set_xlabel("Relative Easting [m]")
+    ax.set_ylabel("Relative Northing [m]")
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    ax.axis("equal")
+    ax.legend(loc="upper right")
+    ax.figure.tight_layout()
+    plt.show()
 
-    ddx = np.gradient(dx, positions)
-    ddy = np.gradient(dy, positions)
+    ### Define piecewise-constant curvature intervals
 
-    denominator = (dx**2 + dy**2)**1.5
+    curvatureBoundaries = np.arange(positions[0], positions[-1], spacing)
+    curvatureBoundaries = np.append(curvatureBoundaries, positions[-1])
 
-    curvature = np.divide(dx * ddy - dy * ddx, denominator, out=np.zeros_like(denominator), where=denominator > 1e-12)
+    ### Compute spline headings at interval boundaries
 
+    dx, dy = splev(curvatureBoundaries, spline, der=1)
 
-    ### Interpolate curvature to measured positions
+    headings = np.arctan2(dy, dx)
+    headings = np.unwrap(headings)
 
-    curvatures = np.interp(measuredPositions, positions, curvature)
+    ### Compute piecewise-constant curvature
 
-    return curvatures
+    ds = np.diff(curvatureBoundaries)
+    deltaHeading = np.diff(headings)
+
+    curvaturePositions = curvatureBoundaries[:-1]
+    curvatures = deltaHeading / ds
+
+    return curvaturePositions, curvatures
 
 
 if __name__ == '__main__':
@@ -127,7 +152,7 @@ if __name__ == '__main__':
 
     ### Curvature
 
-    curvatures = computeCurvature(df)
+    curvaturePositions, curvatures = computeCurvature(df)
     validCurvature = np.abs(curvatures) > 1e-12
 
     radii = np.full(curvatures.shape, "infinity", dtype=object)
@@ -158,7 +183,7 @@ if __name__ == '__main__':
 
     curvatures = [
         [float(pos), float(radiusStart) if radiusStart != "infinity" else "infinity", float(radiusEnd) if radiusEnd != "infinity" else "infinity"]
-        for pos, radiusStart, radiusEnd in zip(positions, radii, radii)
+        for pos, radiusStart, radiusEnd in zip(curvaturePositions, radii, radii)
     ]
 
     track_data = {
