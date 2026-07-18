@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from scipy.interpolate import splprep, splev   # todo: problems with np version!
+# from scipy.interpolate import splprep, splev   # todo: problems with np version!
 
 import numpy as np
 import pandas as pd
