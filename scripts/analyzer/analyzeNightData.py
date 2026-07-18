@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     ### 1. Import Data
 
-    df = pd.read_csv("../../nightTests/journey1_odometry.csv")
+    df = pd.read_csv("../../nightTests/odometry_NightTestJourney1_StationA_StationB.csv")
 
     times = df['Time [s]'].to_numpy()
     positions = df['Position [m]'].to_numpy()

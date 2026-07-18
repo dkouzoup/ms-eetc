@@ -1,3 +1,5 @@
+from numbers import Real
+
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -388,11 +390,11 @@ class casadiSolver():
 
         # check boundary conditions on time
 
-        if not isinstance(initialTime, (int, float)) or initialTime < 0:
+        if isinstance(initialTime, bool) or not isinstance(initialTime, Real) or initialTime < 0:
 
             raise ValueError("Initial time must be a positive number, not {}!".format(initialTime))
 
-        if not isinstance(terminalTime, (int, float)) or terminalTime <= 0:
+        if isinstance(initialTime, bool) or not isinstance(initialTime, Real) or terminalTime <= 0:
 
             raise ValueError("Terminal time must be a strictly positive number, not {}!".format(terminalTime))
 

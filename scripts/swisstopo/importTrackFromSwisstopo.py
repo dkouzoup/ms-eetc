@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-# from scipy.interpolate import splprep, splev   # todo: problems with np version!
+from scipy.interpolate import splprep, splev   # todo: problems with np version!
 
 import numpy as np
 import pandas as pd
@@ -81,6 +81,37 @@ if __name__ == '__main__':
     The script validates the required columns and initial speed limit,
     extracts the speed profile, computes smoothed gradients from altitude data,
     and saves the resulting track definition json.
+    
+    Only make changes in the "Input" section of this script.
+    
+    How to get track data from Swisstopo:
+    
+    1.  a)  Create an empty CSV File. This will eventually contain the whole track data.
+        b)  In the first row, set these column titles:
+            "Total_Distance", "Distance", "Altitude", "Easting", "Northing", "Longitude", "Latitude", "V_max", "Station"
+    2.  a)  Go to: https://map.geo.admin.ch
+        b)  In the searchbar, search for: "Railway swissTLM3D", select it under "add map".
+            It should now be visible. On the left, it appears as an active map under "Maps displayed".
+    3.  a)  Go to: https://openrailwaymap.org/
+        b)  On the left, select Max speed.
+    4.  Repeat step 4 for every segment of your track.
+        a)  In Swisstopo, click on the track segment you want to export.
+            A pop-up window will open. Then click on "Display profile".
+            A second pop-up window appears displaying the altitude profile of the selected track segment.
+            Click on the download symbol ("Get data as CSV file").
+        b)  Open the downloaded CSV file in Excel.
+            Because the altitude profile does not account for tunnels and bridges, one needs to manually add them to the altitude profile.
+            For this, look at the displayed altitude profile in Swisstopo and correct the corresponding entries in Excel.
+        c)  Copy all the data (including the modified altitude data) into the master CSV file below the last data entries there.
+            Based on the "Distance" column of the new data, extend "Total_Distance" which serves as a continuous track distance measure. 
+        d)  From Openrailway map, find all speed limit changes for the current track section and localize the changing points in Swisstopo.
+            By hovering with the mouse over the altitude profile, one can precisely locate the speed limit changing points.
+            Add the new speedlimit to the corresponding row in the master Excel.
+            Not all entries in the "V_max" column need to be filled. Only enter values where the speed limit changes
+        e)  If there is any station in the current track section, find the position of the middle point of the station on Swisstopo.
+            Add the station name to the master Excel at the corresponding position entry.
+    5.  Once all track segments have been completed, save the data as a CSV File.
+        Set the corresponding paths in this script and then run it.
     """
 
 
@@ -110,7 +141,8 @@ if __name__ == '__main__':
         "Northing",
         "Longitude",
         "Latitude",
-        "V_max"
+        "V_max",
+        "Station",
     }
 
     missingColumns = requiredColumns - set(df.columns)

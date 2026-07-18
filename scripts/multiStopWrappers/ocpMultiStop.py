@@ -26,9 +26,12 @@ if __name__ == '__main__':
 
     ####################################################################################################################
     ### Input
-    directory = '../nightTests'
+    directory = '../../nightTests'
+    trainDirectory = '../../nightTests'
     trainId = 'trainNight'
+    trackDirectory = '../../nightTests'
     trackId = 'trackNight'
+    journeyDirectory = '../../nightTests'
     journeyId = 'trackNight_journeyNight'
     ####################################################################################################################
 
@@ -39,14 +42,14 @@ if __name__ == '__main__':
 
     # Train
 
-    train = Train(config={'id':trainId}, pathJSON=directory)
+    train = Train(config={'id':trainId}, pathJSON=trainDirectory)
     train.forceMinPn = 0
     train.withPnBrake = False
     train.powerLosses = get_power_loss_function(train, "static")
 
     # Journey
 
-    journey = Journey(config={'id':journeyId}, pathJSON=directory)
+    journey = Journey(config={'id':journeyId}, pathJSON=journeyDirectory)
     numOfJourneySections = len(journey.journeySectionBounds)
 
 
@@ -58,7 +61,7 @@ if __name__ == '__main__':
 
         journey = Journey(config={'id': journeyId}, sectionIdx=sectionIdx, pathJSON=directory)
 
-        track = Track(config={'id': trackId}, pathJSON=directory)
+        track = Track(config={'id': trackId}, pathJSON=trackDirectory)
         track.updateTrainLengthDependentValues(train)
         track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 

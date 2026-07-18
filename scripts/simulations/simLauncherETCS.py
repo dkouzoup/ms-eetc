@@ -29,7 +29,7 @@ if __name__ == '__main__':
     trackId = 'CH_StGallen_Wil'
 
     directoryJourney = '../../journeys'
-    journeyId = 'CH_StGallen_Wil_Journey_10'
+    journeyId = 'CH_StGallen_Wil_Journey_01'
     journeySectionIdx = 0
 
     efficiencyMode = "static"  # perfect, static, dynamic
