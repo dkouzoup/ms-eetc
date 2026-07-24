@@ -9,9 +9,28 @@ from mseetc.utils import checkTTOBenchVersion, convertUnit
 
 class Journey():
 
-    def __init__(self, config, pathJSON=Path(__file__).parent.parent / 'journeys') -> None:
+    def __init__(self, config, sectionIdx=0, pathJSON=Path(__file__).parent.parent / 'journeys') -> None:
         """
         Constructor of Journey objects.
+
+        Parameters
+        ----------
+        config : dict
+            Journey configuration. Must contain the key 'id'.
+
+        sectionIdx : int, optional
+            Zero-based index of the journey section to select.
+
+            A journey file may contain timing points for multiple journey sections.
+            The section index selects one section by cropping the
+            complete timing point list to the timing points between the
+            corresponding departure and arrival stopping points.
+
+            After cropping, time constraints are shifted so that the selected
+            departure time becomes 0.
+
+        pathJSON : str or pathlib.Path, optional
+            Path to the directory containing the journey JSON files.
         """
 
         # check config
@@ -37,13 +56,35 @@ class Journey():
 
         self.associatedTrackID = data['metadata']['associated track']
 
-        self.timingPoints = self.readTimingPoints(data['timing points'])
+        self.sectionIdx = sectionIdx
+
+        self.completeTimingPoints = self.readTimingPoints(data['timing points'])
+
+        self.journeySectionBounds = self.getJourneySectionBounds()
+
+        self.selectJourneySection(sectionIdx)
+
+
+    def selectJourneySection(self, sectionIdx):
+        """
+        Select one journey section from the complete timing point list.
+
+        The selected section is defined by the departure and arrival stopping
+        points corresponding to the given zero-based section index.
+        """
+
+        self.sectionIdx = sectionIdx
+
+        self.timingPoints = self.cropTimingPoints(sectionIdx)
+
+        self.shiftTimeConstraints()
 
         self.checkFields()
 
         self.computeStartAndEndPoints()
 
         self.computeInitialAndTerminalStates()
+
 
     def readTimingPoints(self, timingPoints):
 
@@ -85,12 +126,77 @@ class Journey():
 
         return value is not None and not pd.isna(value)
 
+    def isStoppingPoint(self, point):
+
+        return point["Lower speed constraint [m/s]"] == 0 and point["Upper speed constraint [m/s]"] == 0
+
+    def getJourneySectionBounds(self):
+
+        positions = self.completeTimingPoints.index.values
+
+        departures = [0]
+        arrivals = []
+
+        for ii in range(1, len(positions)):
+
+            if positions[ii] == positions[ii - 1]:
+
+                arrivals.append(ii - 1)
+                departures.append(ii)
+
+        arrivals.append(len(positions) - 1)
+
+        return list(zip(departures, arrivals))
+
+
+    def cropTimingPoints(self, sectionIdx):
+
+        if type(sectionIdx) is not int:
+
+            raise ValueError("Journey section index must be an integer!")
+
+        if sectionIdx < 0 or sectionIdx >= len(self.journeySectionBounds):
+
+            raise ValueError("Journey section index out of range!")
+
+        idxStart, idxEnd = self.journeySectionBounds[sectionIdx]
+
+        return self.completeTimingPoints.iloc[idxStart:idxEnd + 1].copy()
+
+
+    def getTimeOffset(self):
+
+        firstPoint = self.timingPoints.iloc[0]
+
+        tMin = firstPoint["Lower time constraint [s]"]
+        tMax = firstPoint["Upper time constraint [s]"]
+
+        if self.isSet(tMin):
+
+            return tMin
+
+        if self.isSet(tMax):
+
+            return tMax
+
+        return 0
+
+
+    def shiftTimeConstraints(self):
+
+        self.timeOffset = self.getTimeOffset()
+
+        for key in ["Lower time constraint [s]", "Upper time constraint [s]"]:
+            self.timingPoints[key] = self.timingPoints[key].apply(
+                lambda value: value - self.timeOffset if self.isSet(value) else value
+            )
+
 
     def checkFields(self):
 
         if len(self.timingPoints) < 2:
 
-            raise ValueError("Journey must contain at least two timing points!")
+            raise ValueError("Journey section must contain at least two timing points!")
 
         positions = self.timingPoints.index.values
 
@@ -100,18 +206,18 @@ class Journey():
 
         if any(pos2 <= pos1 for pos1, pos2 in zip(positions[:-1], positions[1:])):
 
-            raise ValueError("Timing point positions must be strictly increasing!")
+            raise ValueError("Timing point positions in selected journey section must be strictly increasing!")
 
         firstPoint = self.timingPoints.iloc[0]
         lastPoint = self.timingPoints.iloc[-1]
 
-        if firstPoint["Lower speed constraint [m/s]"] != 0 or firstPoint["Upper speed constraint [m/s]"] != 0:
+        if not self.isStoppingPoint(firstPoint):
 
-            raise ValueError("First timing point must have both speed constraints set to zero!")
+            raise ValueError("First timing point of selected journey section must have both speed constraints set to zero!")
 
-        if lastPoint["Lower speed constraint [m/s]"] != 0 or lastPoint["Upper speed constraint [m/s]"] != 0:
+        if not self.isStoppingPoint(lastPoint):
 
-            raise ValueError("Last timing point must have both speed constraints set to zero!")
+            raise ValueError("Last timing point of selected journey section must have both speed constraints set to zero!")
 
         for ii, point in self.timingPoints.iterrows():
 

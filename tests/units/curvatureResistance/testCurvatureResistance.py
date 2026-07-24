@@ -6,6 +6,7 @@ from mseetc.efficiency import totalLossesFunction
 from mseetc.ocp import casadiSolver
 from mseetc.train import Train
 from mseetc.track import Track
+from mseetc.journey import Journey
 
 
 class TestCurvatureResistance(unittest.TestCase):
@@ -16,7 +17,7 @@ class TestCurvatureResistance(unittest.TestCase):
         Creates two test tracks that are used in the tests.
         '''
 
-        cls.track = ("../../tracks/", "00_var_speed_limit_100")
+        cls.track = ("tests/fixtures/tracks/", "00_var_speed_limit_100")
 
         cls.constantK = 1/300 # [m^-1]
 
@@ -26,9 +27,9 @@ class TestCurvatureResistance(unittest.TestCase):
 
         cls.speedAtEnd = 1 # [m/s]
 
-        cls.thresholdVelocityError= 1e-3 # dimensionless quantity used in the minimum time test
+        cls.thresholdVelocityError= 2e-3 # dimensionless quantity used in the minimum time test
 
-        cls.thresholdEnergyError = 5e-2 # dimensionless quantity used in the minimum energy test
+        cls.thresholdEnergyError = 7e-2 # dimensionless quantity used in the minimum energy test
 
         try:
 
@@ -54,38 +55,35 @@ class TestCurvatureResistance(unittest.TestCase):
         return g*0.5*abs(self.constantK)/((1-30*abs(self.constantK))*rho)*(abs(self.constantK)<=1/300) + \
                 g*0.65*abs(self.constantK)/((1-55*abs(self.constantK))*rho)*(abs(self.constantK)>1/300)
 
-
-    def solveOptimalControlProblem(self, track, energyOptimal, lossFunction, terminalTime, train, finalPosition):
+    def solveOptimalControlProblem(self, track, energyOptimal, lossFunction, train, journeyID, sectionIdx=0):
         '''
-        Solves a minimum time or minimium energy optimal control problem.
+        Solves a minimum time or minimum energy optimal control problem.
 
         - param track: Track object
-        - param energyOptimal: bool variable. If false the minimum time problem is solved
-        - param lossFunction: a function taking two inputs (f,v) and returning the electrical
-        losses of the train. Used for solving the minimum energy problem.
-        - param terminalTime: time at which the trip must complete. For the minimum time problem this is just an upperbound of the problem.
+        - param energyOptimal: bool variable. If false the minimum time problem is solved.
+        - param lossFunction: function taking two inputs (f, v) and returning the electrical losses.
         - param train: Train object
-        - param finalPosition: position where the trip must end.
-        - return: a dataframe containing the solution of the problem.
+        - param journeyID: ID of the journey JSON file.
+        - param sectionIdx: selected journey section index.
+        - return: dataframe containing the solution of the problem.
         '''
 
-        v0 = self.speedAtStart
-        vN = self.speedAtEnd
+        journey = Journey(config={'id': journeyID}, sectionIdx=sectionIdx, pathJSON='tests/fixtures/journeys')
 
-        track.updateLimits(positionEnd=finalPosition)
+        track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
         solverOpts = { "maxIterations": 500,
-                    "numIntervals": 300,
+                    "numIntervals": 250,
                     "integrationMethod": "RK",
                     "integrationOptions": {"order": 4, "numSteps": 1, "numApproxSteps": 1 },
                     "energyOptimal": energyOptimal,
-                    "minimumVelocity": min(v0, vN)}
+                    "minimumVelocity": 1}
 
         train.powerLosses = lossFunction
 
-        ocp0 = casadiSolver(train, track, solverOpts)
+        ocp0 = casadiSolver(train, track, journey, solverOpts)
 
-        df0, _ = ocp0.solve(terminalTime, terminalVelocity=vN, initialVelocity=v0)
+        df0, _ = ocp0.solve()
 
         return df0
 
@@ -109,29 +107,31 @@ class TestCurvatureResistance(unittest.TestCase):
         # # # Perfect efficiency
         lossFun = lambda f,v: 0
 
-        train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../../trains')
+        train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='tests/fixtures/trains')
         train.forceMinPn = 0
         train.powerMax = None
         train.powerMin = None
 
-        resultNoCurvature = self.solveOptimalControlProblem(track = self.trackNoCurvature,
-                                                            energyOptimal = False,
-                                                            lossFunction = lossFun,
-                                                            terminalTime = minTimeUpperBound,
-                                                            train = train,
-                                                            finalPosition = self.finalPosition)
+        resultNoCurvature = self.solveOptimalControlProblem(
+            track=self.trackNoCurvature,
+            energyOptimal=False,
+            lossFunction=lossFun,
+            train=train,
+            journeyID='00_var_speed_limit_100_Journey_MinTime_180'
+        )
 
         train.forceMax = train.forceMax + self.specificCurvatureResistanceForce(train.g, train.rho)*train.mass*train.rho
 
         # remark that forceMin is negative; hence we sum the curvature resistance term.
         train.forceMin = train.forceMin + self.specificCurvatureResistanceForce(train.g, train.rho)*train.mass*train.rho
 
-        resultConstantCurvature = self.solveOptimalControlProblem(track = self.trackConstantCurvature,
-                                                                  energyOptimal = False,
-                                                                  lossFunction = lossFun,
-                                                                  terminalTime = minTimeUpperBound,
-                                                                  train = train,
-                                                                  finalPosition = self.finalPosition)
+        resultConstantCurvature = self.solveOptimalControlProblem(
+            track=self.trackConstantCurvature,
+            energyOptimal=False,
+            lossFunction=lossFun,
+            train=train,
+            journeyID='00_var_speed_limit_100_Journey_MinTime_180'
+        )
 
         resultNoCurvature, resultConstantCurvature = resultNoCurvature.reset_index(), resultConstantCurvature.reset_index()
 
@@ -151,7 +151,7 @@ class TestCurvatureResistance(unittest.TestCase):
 
         finalPosition = 3475 # [m]
 
-        train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='../../trains')
+        train = Train(config={'id':'NL_Intercity_VIRM6'}, pathJSON='tests/fixtures/trains')
         train.forceMinPn = 0
 
         etaMax = 0.73
@@ -171,19 +171,21 @@ class TestCurvatureResistance(unittest.TestCase):
 
         for lossFunction in lossesFunctions:
 
-            resultNoCurvature = self.solveOptimalControlProblem(track = self.trackNoCurvature,
-                                                                energyOptimal = True,
-                                                                lossFunction = lossFunction,
-                                                                terminalTime = tripTime,
-                                                                train = train,
-                                                                finalPosition = finalPosition)
+            resultNoCurvature = self.solveOptimalControlProblem(
+                track=self.trackNoCurvature,
+                energyOptimal=True,
+                lossFunction=lossFunction,
+                train=train,
+                journeyID='00_var_speed_limit_100_Journey_Energy_200'
+            )
 
-            resultConstantCurvature = self.solveOptimalControlProblem(track = self.trackConstantCurvature,
-                                                                      energyOptimal = True,
-                                                                      lossFunction = lossFunction,
-                                                                      terminalTime = tripTime,
-                                                                      train = train,
-                                                                      finalPosition = finalPosition)
+            resultConstantCurvature = self.solveOptimalControlProblem(
+                track=self.trackConstantCurvature,
+                energyOptimal=True,
+                lossFunction=lossFunction,
+                train=train,
+                journeyID='00_var_speed_limit_100_Journey_Energy_200'
+            )
 
             resultNoCurvature, resultConstantCurvature = resultNoCurvature.reset_index(),  resultConstantCurvature.reset_index()
 

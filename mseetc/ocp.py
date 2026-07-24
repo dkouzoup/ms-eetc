@@ -1,5 +1,8 @@
+from numbers import Real
+
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 
 from mseetc.train import *
 
@@ -207,7 +210,7 @@ class casadiSolver():
                     ubg += [abs(upperBound)]*2
                     lbg += [-abs(lowerBound)]*2
 
-                # gradient and curvature of current index
+                # gradient, curvature and tunnel properties of current index
                 grad = self.points.iloc[i]['Gradient [permil]']/1e3
                 gradLinearTerm = self.points.iloc[i]["Gradient linear term [permil/m]"]/1e3
                 curv = self.points.iloc[i]['Curvature [1/m]']
@@ -258,7 +261,7 @@ class casadiSolver():
 
                     else:
 
-                        energyLossesTr, energyLossesRgb = trainIntegrator.calcLosses(ca.sqrt(velSq[i]), time[i+1]-time[i], Fel[i], Fpb[i], grad, curv)
+                        energyLossesTr, energyLossesRgb = trainIntegrator.calcLosses(ca.sqrt(velSq[i]), time[i+1]-time[i],0, Fel[i], Fpb[i], grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)
 
                         obj += self.steps[i]*Fel[i] + s[i]
 
@@ -282,9 +285,18 @@ class casadiSolver():
             speedLimit = self.points.iloc[i]['Speed limit [m/s]']
             speedLimit = min(speedLimit, velocityMax)
 
-            if i > 0:
+            count = 1
 
-                speedLimit = min(speedLimit, self.points.iloc[i-1]['Speed limit [m/s]'])  # do not accelerate before speed limit increase
+            while i - count >= 0:
+
+                previous_speed_limit = self.points.iloc[i - count]["Speed limit [m/s]"]
+
+                if previous_speed_limit >= speedLimit:
+
+                    break
+
+                speedLimit = previous_speed_limit  # do not accelerate before speed limit increase
+                count += 1
 
             timeLower = self.initialTime
             timeUpper = self.terminalTime
@@ -378,11 +390,11 @@ class casadiSolver():
 
         # check boundary conditions on time
 
-        if not isinstance(initialTime, (int, float)) or initialTime < 0:
+        if isinstance(initialTime, bool) or not isinstance(initialTime, Real) or initialTime < 0:
 
             raise ValueError("Initial time must be a positive number, not {}!".format(initialTime))
 
-        if not isinstance(terminalTime, (int, float)) or terminalTime <= 0:
+        if isinstance(initialTime, bool) or not isinstance(initialTime, Real) or terminalTime <= 0:
 
             raise ValueError("Terminal time must be a strictly positive number, not {}!".format(terminalTime))
 
@@ -472,7 +484,7 @@ class casadiSolver():
             df['Force (pnb) [N]'] = np.array(FpbOpt)*self.totalMass if self.withPnBrake else np.array([0]*(self.numIntervals+1))
             df['Slacks'] = np.array(sOpt)*self.totalMass
 
-            df = postProcessDataFrame(df, self.points, self.train)
+            df = postProcessDataFrame(df, self.points, self.train, self.opts)
 
         return df, stats
 

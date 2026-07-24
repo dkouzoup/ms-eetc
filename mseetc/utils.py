@@ -10,6 +10,8 @@ from distutils.spawn import find_executable
 import pandas as pd
 from matplotlib import pyplot as plt
 
+from mseetc.efficiency import totalLossesFunction
+
 
 def var(tag, dim=None):
     "Wrapper to create symbolic variables in casadi."
@@ -224,7 +226,7 @@ def splitLosses(fun):
     return funTr, funRgb
 
 
-def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False, integrateRollingResistance=False):
+def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses=False, integrateRollingResistance=False):
 
     unitScaling = 1e-6/3.6  # Nm -> kWh conversion
     totalMass = train.mass*train.rho
@@ -276,7 +278,11 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
         fs = (dfOut['Force (el) [N]']/totalMass).values.tolist()
         ps = (dfOut['Force (pnb) [N]']/totalMass).values.tolist()
         gs = (dfOut['Gradient [permil]']/1e3).values.tolist()
+        gl = (dfOut['Gradient linear term [permil/m]']/1e3).values.tolist()
         cr = dfOut['Curvature [1/m]'].values.tolist()
+        cl = dfOut['Curvature linear term [1/m^2]'].values.tolist()
+        cs = dfOut['CrossSection [m^2]'].values.tolist()
+        tf = computeTunnelFactor(cs, train, opts)
 
         losses = []
 
@@ -284,7 +290,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
 
             dt = ts[jj+1]-ts[jj]
 
-            eTr, eRgb = trainIntegrator.calcLosses(vs[jj], dt, fs[jj], ps[jj], gs[jj], cr[jj])
+            eTr, eRgb = trainIntegrator.calcLosses(vs[jj], dt, 0, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
 
             eEl = eTr if fs[jj] >= 0 else eRgb
 
@@ -308,8 +314,12 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
         vs = dfOut['Velocity [m/s]'].values.tolist()
         fs = (dfOut['Force (acc) [N]']/totalMass).values.tolist()
         ps = (dfOut['Force (pnb) [N]']/totalMass).values.tolist()
-        gs = (dfOut['Gradient [permil]']/1e3).values.tolist()
+        gs = (dfOut['Gradient [permil]'] / 1e3).values.tolist()
+        gl = (dfOut['Gradient linear term [permil/m]'] / 1e3).values.tolist()
         cr = dfOut['Curvature [1/m]'].values.tolist()
+        cl = dfOut['Curvature linear term [1/m^2]'].values.tolist()
+        cs = dfOut['CrossSection [m^2]'].values.tolist()
+        tf = computeTunnelFactor(cs, train, opts)
 
         rr = []
 
@@ -317,7 +327,7 @@ def postProcessDataFrame(dfIn, points, train, CVODES=True, integrateLosses=False
 
             ds = ss[jj+1]-ss[jj]
 
-            loss, _ = trainIntegrator.calcRollingResistance(vs[jj], ds, fs[jj], ps[jj], gs[jj], cr[jj])
+            loss, _ = trainIntegrator.calcRollingResistance(vs[jj], ds, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
 
             rr.append(totalMass*vecToNum(loss))
 
@@ -485,6 +495,16 @@ def latexify():
 
 def computeTunnelFactor(cross_section, train, opts):
 
+    if isinstance(cross_section, (list, tuple, np.ndarray, pd.Series)):
+
+        return np.array([computeTunnelFactor(cs, train, opts) for cs in cross_section], dtype=float)
+
+    cross_section = float(cross_section)
+
+    if np.isnan(cross_section):
+
+        raise ValueError("Tunnel cross section must not be NaN!")
+
     if cross_section == float("inf"):
 
         return 0 # no tunnel
@@ -493,6 +513,7 @@ def computeTunnelFactor(cross_section, train, opts):
     tunnelCoefficients = train.tunnelCoefficients
 
     if not tunnelCoefficients:
+
         raise ValueError("Tunnel cross section was specified, but train has no tunnel resistance data.")
 
     availableCrossSections = list(tunnelCoefficients.keys())
@@ -675,6 +696,40 @@ def introduceSufficientShootingNodesForETCSBrakingCurves(track, existingPoints):
 def isSet( value):
 
     return value is not None and not pd.isna(value)
+
+
+def get_power_loss_function(train, mode="perfect",* ,auxiliaries: float = 27_000, eta_gear: float = 0.96):
+
+    if mode == "perfect":
+
+        return lambda f, v: 0
+
+    elif mode == "static":
+
+        return lambda f, v: (f>0)*f*v*(1-train.etaTraction)/train.etaTraction - (f<0)*f*v*(1-train.etaRgBrake)
+
+    elif mode == "dynamic":
+
+        return totalLossesFunction(train, auxiliaries=auxiliaries, etaGear=eta_gear)
+
+    else:
+
+        raise ValueError("mode must be one of: 'perfect', 'static', 'dynamic'")
+
+
+def printStats(df, stats, solver, train):
+
+    if df is not None:
+
+        print("")
+        print("Objective value = {:.2f} {}".format(stats['Cost'], 'kWh' if solver.opts.energyOptimal else 's'))
+        print("")
+        print("Maximum acceleration: {:5.2f}, with bound {}".format(df.max()['Acceleration [m/s^2]'], train.accMax if train.accMax is not None else 'None'))
+        print("Maximum deceleration: {:5.2f}, with bound {}".format(df.min()['Acceleration [m/s^2]'],train.accMin if train.accMin is not None else 'None'))
+
+    else:
+
+        print("Solver failed!")
 
 
 if __name__ == '__main__':

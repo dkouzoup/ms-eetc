@@ -31,7 +31,7 @@ class Train():
 
             data = json.load(file)
 
-        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3', '1.4'])
+        checkTTOBenchVersion(data, ['1.1', '1.2', '1.3', '1.4', '1.5'])
 
         # overwrite json data with config values if applicable
 
