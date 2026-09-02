@@ -6,6 +6,8 @@ import pandas as pd
 from mseetc.ocp import casadiSolver
 from mseetc.utils import get_power_loss_function
 
+from wrapperConfig import loadConfig
+
 INTERVALS_PER_METER = 300/4000
 
 
@@ -13,7 +15,7 @@ if __name__ == '__main__':
 
     """
     Compute energy optimal trajectory for a multi-stop-journey
-    Only make changes in the "Input" section.
+    Only make changes in config.json (copy config.example.json to get started).
     Results are saved in a new directory called "ocp" located in the input folder.
     Per journey section the resulting optimized trajectory is saved in a pickle file.
     For easy data access, energy consumption per section is saved in a csv file.
@@ -25,14 +27,16 @@ if __name__ == '__main__':
 
 
     ####################################################################################################################
-    ### Input
-    directory = '../../nightTests'
-    trainDirectory = '../../nightTests'
-    trainId = 'trainNight'
-    trackDirectory = '../../nightTests'
-    trackId = 'trackNight'
-    journeyDirectory = '../../nightTests'
-    journeyId = 'trackNight_journeyNight'
+    ### Input (edit config.json, see config.example.json)
+    config = loadConfig()
+
+    directory = config['directory']
+    trainDirectory = config['trainDirectory']
+    trainId = config['trainId']
+    trackDirectory = config['trackDirectory']
+    trackId = config['trackId']
+    journeyDirectory = config['journeyDirectory']
+    journeyId = config['journeyId']
     ####################################################################################################################
 
 
@@ -51,7 +55,6 @@ if __name__ == '__main__':
 
     journey = Journey(config={'id':journeyId}, pathJSON=journeyDirectory)
     numOfJourneySections = len(journey.journeySectionBounds)
-
 
     energyResults = []  # result data container
 

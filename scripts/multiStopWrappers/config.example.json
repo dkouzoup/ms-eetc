@@ -1,0 +1,7 @@
+{
+    "directory": "../../test",
+    "stationDict": "stationDict.csv",
+    "trainId": "train01",
+    "trackId": "track01",
+    "journeyId": "journey01"
+}

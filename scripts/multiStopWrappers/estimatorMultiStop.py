@@ -8,6 +8,8 @@ import re
 from mseetc.estimator import forceEstimator, energyEstimator
 from mseetc.utils import get_power_loss_function
 
+from wrapperConfig import loadConfig
+
 INTERVALS_PER_METER = 400/3000
 
 
@@ -90,7 +92,7 @@ if __name__ == '__main__':
 
     """
     Estimate energy consumption for multiple journey sections.
-    
+
     Each journey section must be specified in a single csv file.
     The Title of each csv file must have the following form:
         odometry_<<ID/Name>>_<<From_Station_Name>>_<<To_Station_Name>>.csv
@@ -98,19 +100,19 @@ if __name__ == '__main__':
         - "Time [s]"
         - "Velocity [m/s]
         - "Odometry [m]
-        
+
     All csv files must be saved in the same input folder (directory).
-    
+
     The input folder (directory) must contain a station dict.
     It is a csv file with the following columns:
         - "Station_Name"
         - "Position [m]"
     The "Position [m]" is the midpoint position of the station, where the position reference comes from the track data used.
-    
-    Only make changes in the "Input" section of this script.
-    
+
+    Only make changes in config.json (copy config.example.json to get started).
+
     Results are saved in a new directory called "estimator" located in the input folder (directory).
-    Per journey section the resulting estimated trajectory is saved in a pickle file - 
+    Per journey section the resulting estimated trajectory is saved in a pickle file -
     one for the force and one for the energy estimation.
     For easy data access, estimated energy consumption per section is saved in a csv file.
     """
@@ -120,13 +122,15 @@ if __name__ == '__main__':
 
 
     ####################################################################################################################
-    ### Input
-    directory = '../../nightTests'
-    stationDict = "stationDict.csv"
-    trainDirectory = '../../nightTests'
-    trainId = 'trainNight'
-    trackDirectory = '../../nightTests'
-    trackId = 'trackNight'
+    ### Input (edit config.json, see config.example.json)
+    config = loadConfig()
+
+    directory = config['directory']
+    stationDict = config['stationDict']
+    trainDirectory = config['trainDirectory']
+    trainId = config['trainId']
+    trackDirectory = config['trackDirectory']
+    trackId = config['trackId']
     ####################################################################################################################
 
 
