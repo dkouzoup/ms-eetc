@@ -359,7 +359,8 @@ class casadiSolver():
 
         nlp = {'x': ca.vcat(z), 'f': obj, 'g': ca.vcat(g)}
 
-        self.solver = ca.nlpsol('solver', 'ipopt', nlp, {'ipopt':{'max_iter':opts.maxIterations}})
+        self.solver = ca.nlpsol('solver', 'ipopt', nlp,
+            {'ipopt':{'max_iter':opts.maxIterations}, 'print_time': False, 'record_time': True})
 
         # parameters needed in solve step
 
