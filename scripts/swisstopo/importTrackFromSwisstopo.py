@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-# from scipy.interpolate import splprep, splev   # todo: problems with np version!
+from scipy.interpolate import splprep, splev   # todo: problems with np version!
 
 import numpy as np
 import pandas as pd
@@ -81,11 +81,11 @@ if __name__ == '__main__':
     The script validates the required columns and initial speed limit,
     extracts the speed profile, computes smoothed gradients from altitude data,
     and saves the resulting track definition json.
-    
+
     Only make changes in the "Input" section of this script.
-    
+
     How to get track data from Swisstopo:
-    
+
     1.  a)  Create an empty CSV File. This will eventually contain the whole track data.
         b)  In the first row, set these column titles:
             "Total_Distance", "Distance", "Altitude", "Easting", "Northing", "Longitude", "Latitude", "V_max", "Station"
@@ -103,7 +103,7 @@ if __name__ == '__main__':
             Because the altitude profile does not account for tunnels and bridges, one needs to manually add them to the altitude profile.
             For this, look at the displayed altitude profile in Swisstopo and correct the corresponding entries in Excel.
         c)  Copy all the data (including the modified altitude data) into the master CSV file below the last data entries there.
-            Based on the "Distance" column of the new data, extend "Total_Distance" which serves as a continuous track distance measure. 
+            Based on the "Distance" column of the new data, extend "Total_Distance" which serves as a continuous track distance measure.
         d)  From Openrailway map, find all speed limit changes for the current track section and localize the changing points in Swisstopo.
             By hovering with the mouse over the altitude profile, one can precisely locate the speed limit changing points.
             Add the new speedlimit to the corresponding row in the master Excel.
@@ -117,18 +117,23 @@ if __name__ == '__main__':
 
     ####################################################################################################################
     ### Input
-    csvInputfilePath = r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks\swisstopo\Track_StGallen_Wil.csv"
 
-    outputDirectory = Path(r"C:\Users\rolan\Documents\ms-eetc-innocheque\tracks\swisstopo")
-    outputTrackId = "CH_StGallen_Wil_Swisstopo"
-    author = "Roland Staerk"
+    # Repository root, derived from this script's location (…/scripts/swisstopo/importTrackFromSwisstopo.py).
+    repoRoot = Path(__file__).resolve().parents[2]
+    tracksDirectory = repoRoot / "tracks" / "swisstopo"
+
+    csvInputfilePath = tracksDirectory / "Track_Sargans_StGallen.csv"
+
+    outputDirectory = tracksDirectory
+    outputTrackId = "CH_Sargans_StGallen_Swisstopo"
+    author = "Dimitris Kouzoupis"
 
     ####################################################################################################################
 
 
     ### Read CSV
 
-    df = pd.read_csv(csvInputfilePath, na_values=["<null>", "null", ""])
+    df = pd.read_csv(csvInputfilePath, na_values=["<null>", "null", ""], encoding="mac_roman")
 
     print(df.head())
     print(df.dtypes)
@@ -193,7 +198,7 @@ if __name__ == '__main__':
 
     ### Parse to Json
 
-    output_path = outputDirectory / f"{outputTrackId}.json"
+    output_path = outputDirectory.expanduser() / f"{outputTrackId}.json"
 
     stops = [
         0.0,
@@ -260,5 +265,9 @@ if __name__ == '__main__':
 
     ### Save Json
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(track_data, f, indent=4)
+
+    print(f"Wrote track definition to {output_path}")
