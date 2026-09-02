@@ -35,7 +35,7 @@ class TestETCS(unittest.TestCase):
         track = Track(config={'id': 'test_ETCS_flat_track'}, pathJSON='tests/fixtures/tracks')
         track.updateTrainLengthDependentValues(train)
 
-        journey = Journey(config={'id': 'CH_StGallen_Wil_Journey_02'}, pathJSON='tests/fixtures/journeys')
+        journey = Journey(config={'id': 'test_ETCS_flat_track_Journey_01'}, pathJSON='tests/fixtures/journeys')
         track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
         optsTarget = {'numIntervals':800, 'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps':1}, 'energyOptimal':True}

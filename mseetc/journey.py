@@ -239,6 +239,21 @@ class Journey():
                 raise ValueError("Timing point constraints must be positive finite numbers or None!")
 
 
+    def checkAssociatedTrack(self, track):
+        """
+        Check that a track matches the one this journey was defined on.
+
+        The timing point positions are only meaningful on the associated track,
+        so pairing a journey with a different track silently yields results for
+        stopping points that are not where the journey says they are.
+        """
+
+        if self.associatedTrackID != track.id:
+
+            raise ValueError("Journey '{}' is defined on track '{}', but track '{}' was given!".format(
+                self.id, self.associatedTrackID, track.id))
+
+
     def computeStartAndEndPoints(self):
 
         self.positionStart = self.timingPoints.index.values[0]

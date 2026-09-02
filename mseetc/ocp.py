@@ -91,6 +91,7 @@ class casadiSolver():
         track.checkFields()
         train.checkFields()
         journey.checkFields()
+        journey.checkAssociatedTrack(track)
 
         opts = OptionsCasadiSolver(optsDict)
 

@@ -242,7 +242,8 @@ class Track():
         # read data
         self.length = convertUnit(data['stops']['values'][-1], data['stops']['unit'])
         self.altitude = convertUnit(data['altitude']['value'], data['altitude']['unit']) if 'altitude' in data else 0
-        self.title = data['metadata']['id']
+        self.id = data['metadata']['id']  # stable identifier, unchanged by 'reverse'
+        self.title = self.id  # display name, gets a suffix when the track is reversed
 
         self.importSpeedLimitTuples(data['speed limits']['values'],
                                     data['speed limits']['units']['position'],
