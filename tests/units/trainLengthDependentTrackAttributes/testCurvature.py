@@ -556,7 +556,7 @@ class TestCurvature(unittest.TestCase):
         track = Track(config={'id': 'test_two_radii'}, pathJSON='tests/fixtures/tracks')
         track.updateTrainLengthDependentValues(train)
 
-        journey = Journey(config={'id': 'CH_StGallen_Wil_Journey_01'}, pathJSON='tests/fixtures/journeys')
+        journey = Journey(config={'id': 'test_two_radii_Journey_01'}, pathJSON='tests/fixtures/journeys')
         track.updateLimits(positionStart=journey.positionStart, positionEnd=journey.positionEnd, unit='m')
 
         # PWL Curvatures
