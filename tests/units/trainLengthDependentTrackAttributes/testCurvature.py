@@ -56,7 +56,7 @@ class TestCurvature(unittest.TestCase):
         CVODES is used as the integrator.
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
 
         optsDict = {'integrationMethod': 'CVODES'}
         opts = OptionsCasadiSolver(optsDict)
@@ -192,7 +192,7 @@ class TestCurvature(unittest.TestCase):
         RK substeps are increased until convergence
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
 
         optsDict = {'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps': 0, 'numSteps': 1}}
         opts = OptionsCasadiSolver(optsDict)
@@ -343,7 +343,7 @@ class TestCurvature(unittest.TestCase):
         Time approx steps are increased until convergence
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         trainModel = train.exportModel()
 
         # Scenario
@@ -497,7 +497,7 @@ class TestCurvature(unittest.TestCase):
 
         df_heading_indep = computeHeadingFromCurvature(track.curvatures, track.length)
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = trainLength
         track.updateTrainLengthDependentValues(train)
 
@@ -550,7 +550,7 @@ class TestCurvature(unittest.TestCase):
         energyRelativeTolerance = 1e-4
         numIntervals = 100
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = 600
 
         track = Track(config={'id': 'test_two_radii'}, pathJSON='tests/fixtures/tracks')
@@ -615,7 +615,7 @@ class TestCurvature(unittest.TestCase):
 
         relativeTolerance = 1e-2
         trainLength = 10  # [m]
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = trainLength
 
         track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tests/fixtures/tracks')

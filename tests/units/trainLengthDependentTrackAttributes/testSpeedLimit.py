@@ -21,7 +21,7 @@ class TestSpeedLimit(unittest.TestCase):
         speedLimitBeforeIncrease = 22  # [m/s]
         speedTolerance = 0.001  # [m/s]
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
 
         track = Track(config={'id': 'test_one_speed_increase'}, pathJSON='tests/fixtures/tracks')
 

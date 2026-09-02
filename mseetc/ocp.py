@@ -499,7 +499,7 @@ if __name__ == '__main__':
 
     # Example on how to solve an OCP
 
-    train = Train(config={'id':'NL_intercity_VIRM6', 'max deceleration':None, 'max acceleration':{'unit':'m/s^2', 'value':0.45}})
+    train = Train(config={'id':'NL_Intercity_VIRM6', 'max deceleration':None, 'max acceleration':{'unit':'m/s^2', 'value':0.45}})
 
     track = Track(config={'id':'00_var_speed_limit_100'})
 

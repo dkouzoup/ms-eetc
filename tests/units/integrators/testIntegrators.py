@@ -21,7 +21,7 @@ class TestGradient(unittest.TestCase):
         tol = 0.1
         numIntervals = 200
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = 600
 
         track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tests/fixtures/tracks')
@@ -110,7 +110,7 @@ class TestGradient(unittest.TestCase):
         tol = 0.1
         numIntervals = 200
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
 
         track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tests/fixtures/tracks')
         track.updateTrainLengthDependentValues(train)

@@ -15,7 +15,7 @@ class TestTunnelResistance(unittest.TestCase):
 
         minEnergyRatio = 1.5
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
 
         trackWithoutTunnel = Track(config={'id': 'test_flat_no_tunnel'}, pathJSON='tests/fixtures/tracks')
 

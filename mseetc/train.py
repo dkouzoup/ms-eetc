@@ -736,7 +736,7 @@ if __name__ == '__main__':
     cr = 1/300 # curvature [1/m]
     f0 = 0.4  # specific force [N/kg]
 
-    trainSpecs = Train(config={'id':'NL_intercity_VIRM6'})
+    trainSpecs = Train(config={'id':'NL_Intercity_VIRM6'})
     integrator = TrainIntegrator(trainSpecs.exportModel(), 'RK', optsDict={'numApproxSteps':2})
 
     solution = integrator.solve(t0, v0**2, ds, traction=f0, gradient=gd, curvature=cr)

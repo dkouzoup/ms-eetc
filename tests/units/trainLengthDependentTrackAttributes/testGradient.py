@@ -27,7 +27,7 @@ class TestGradient(unittest.TestCase):
         CVODES is used as the integrator.
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
 
         optsDict = {'integrationMethod': 'CVODES'}
         opts = OptionsCasadiSolver(optsDict)
@@ -165,7 +165,7 @@ class TestGradient(unittest.TestCase):
         RK substeps are increased until convergence
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
 
         optsDict = {'integrationMethod':'RK', 'integrationOptions':{'numApproxSteps': 0, 'numSteps': 1}}
         opts = OptionsCasadiSolver(optsDict)
@@ -318,7 +318,7 @@ class TestGradient(unittest.TestCase):
         Time approx steps are increased until convergence
         '''
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         trainModel = train.exportModel()
 
         # Scenario
@@ -474,7 +474,7 @@ class TestGradient(unittest.TestCase):
 
         df_alt = computeAltitude(track.gradients, track.length)
 
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = trainLength
         track.updateTrainLengthDependentValues(train)
 
@@ -542,7 +542,7 @@ class TestGradient(unittest.TestCase):
         altitudeTolerance = 1e-4
         energyRelativeTolerance = 1e-3
         numIntervals = 25
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = 600
 
         track = Track(config={'id': 'test_one_hill'}, pathJSON='tests/fixtures/tracks')
@@ -622,7 +622,7 @@ class TestGradient(unittest.TestCase):
 
         relativeTolerance = 0.01
         trainLength = 10  # [m]
-        train = Train(config={'id': 'CH_Stadler_Flirt_TPF'}, pathJSON='tests/fixtures/trains')
+        train = Train(config={'id': 'CH_Stadler_FLIRT_TPF'}, pathJSON='tests/fixtures/trains')
         train.length = trainLength
 
         track = Track(config={'id': 'CH_StGallen_Wil'}, pathJSON='tests/fixtures/tracks')
