@@ -33,7 +33,7 @@ def vecToList(x):
 
         pass  # already an array
 
-    return x.flatten().tolist()
+    return np.asarray(x).flatten().tolist()
 
 
 def vecToNum(x):
@@ -235,7 +235,10 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
 
     dfOut['Speed limit [m/s]'] = points['Speed limit [m/s]'].values
     dfOut['Gradient [permil]'] = points['Gradient [permil]'].values
+    dfOut['Gradient linear term [permil/m]'] = points['Gradient linear term [permil/m]'].values
     dfOut['Curvature [1/m]'] = points['Curvature [1/m]'].values
+    dfOut['Curvature linear term [1/m^2]'] = points['Curvature linear term [1/m^2]'].values
+    dfOut['CrossSection [m^2]'] = points['CrossSection [m^2]'].values
     dfOut['Force (acc) [N]'] = dfOut['Force (el) [N]']*(dfOut['Force (el) [N]'] >= 0)
     dfOut['Force (rgb) [N]'] = dfOut['Force (el) [N]']*(dfOut['Force (el) [N]'] < 0)
     dfOut['Force [N]'] = dfOut['Force (acc) [N]'] + dfOut['Force (rgb) [N]'] + dfOut['Force (pnb) [N]']
@@ -258,7 +261,7 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
         dfOut['ds [m]'] = metersPerInterval
         dfOut['vm [m/s]'] = (dfOut['Velocity [m/s]'] + dfOut['Velocity [m/s]'].shift(-1))/2
 
-        energy = lambda x: unitScaling*x['ds [m]']*powerLosses(x['Force (el) [N]'], x['vm [m/s]'])/x['vm [m/s]']
+        energy = lambda x: unitScaling*x['ds [m]']*vecToNum(powerLosses(x['Force (el) [N]'], x['vm [m/s]']))/x['vm [m/s]']
 
         dfOut['Losses [kWh]'] = dfOut.apply(energy, axis=1)
 
@@ -327,7 +330,7 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
 
             ds = ss[jj+1]-ss[jj]
 
-            loss, _ = trainIntegrator.calcRollingResistance(vs[jj], ds, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
+            loss, _ = trainIntegrator.calcRollingResistance(vs[jj], ds, 0, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
 
             rr.append(totalMass*vecToNum(loss))
 
