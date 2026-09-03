@@ -123,7 +123,7 @@ if __name__ == '__main__':
 
         # calculate actual losses
         train.powerLosses = fun2
-        df0b = postProcessDataFrame(df0, ocp0.points, train, integrateLosses=True)
+        df0b = postProcessDataFrame(df0, ocp0.points, train, ocp0.opts, integrateLosses=True)
         df0b_list.append(df0b)
 
         # # # solve problem with constant efficiency
@@ -135,7 +135,7 @@ if __name__ == '__main__':
 
         # calculate actual losses
         train.powerLosses = fun2
-        df1b = postProcessDataFrame(df1, ocp1.points, train, integrateLosses=True)
+        df1b = postProcessDataFrame(df1, ocp1.points, train, ocp1.opts, integrateLosses=True)
         df1b_list.append(df1b)
 
         # # # solve problem with varying efficiency
@@ -147,7 +147,7 @@ if __name__ == '__main__':
 
         # calculate actual losses
         train.powerLosses = fun2
-        df2b = postProcessDataFrame(df2, ocp2.points, train, integrateLosses=True)
+        df2b = postProcessDataFrame(df2, ocp2.points, train, ocp2.opts, integrateLosses=True)
         df2b_list.append(df2b)
 
     plot(df0b_list, df1b_list, df2b_list, timeReserves, figSize=[7,5], filename='figure5.pdf')

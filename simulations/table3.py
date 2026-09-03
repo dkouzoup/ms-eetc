@@ -70,7 +70,7 @@ if __name__ == '__main__':
         expectedEnergies.append(df['Energy [kWh]'].sum())
 
         # calculate actual losses
-        dfb = postProcessDataFrame(df, ocp.points, train, integrateLosses=True)
+        dfb = postProcessDataFrame(df, ocp.points, train, ocp.opts, integrateLosses=True)
 
         actualEnergies.append(dfb['Energy [kWh]'].sum())
 

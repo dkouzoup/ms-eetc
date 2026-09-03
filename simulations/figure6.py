@@ -149,7 +149,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     # calculate actual losses
     train.powerLosses = fun2
-    df0b = postProcessDataFrame(df0, ocp0.points, train, integrateLosses=True)
+    df0b = postProcessDataFrame(df0, ocp0.points, train, ocp0.opts, integrateLosses=True)
 
     # # # solve problem with constant efficiency
     train.powerLosses = fun1
@@ -170,7 +170,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     # calculate actual losses
     train.powerLosses = fun2
-    df1b = postProcessDataFrame(df1, ocp1.points, train, integrateLosses=True)
+    df1b = postProcessDataFrame(df1, ocp1.points, train, ocp1.opts, integrateLosses=True)
 
     # # # solve problem with varying efficiency
     train.powerLosses = fun2
@@ -196,7 +196,7 @@ def runSimulation(trackID='00_var_speed_limit_100', nRuns=1, brakeType='rg'):
 
     # calculate actual losses
     train.powerLosses = fun2
-    df2b = postProcessDataFrame(df2, ocp2.points, train, integrateLosses=True)
+    df2b = postProcessDataFrame(df2, ocp2.points, train, ocp2.opts, integrateLosses=True)
 
     stats = {'numIter0':numIter0, 'numIter1':numIter1, 'numIter2':numIter2, \
         'cpuTime0':cpuTime0, 'cpuTime1':cpuTime1, 'cpuTime2':cpuTime2}
