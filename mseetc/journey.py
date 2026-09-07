@@ -274,7 +274,7 @@ class Journey():
 
     def getTimingPoint(self, position):
 
-        idx = np.where(np.isclose(self.timingPoints.index.values, position))[0]
+        idx = np.where(np.isclose(self.timingPoints.index.values, position, rtol=0, atol=1e-6))[0]
 
         if len(idx) == 0:
             return None
