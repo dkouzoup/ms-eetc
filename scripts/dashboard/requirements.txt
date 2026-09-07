@@ -1,0 +1,8 @@
+# The dashboard only reads the pickles, csv and json files written by the wrappers,
+# so it needs neither casadi nor mseetc and is best installed in its own virtual
+# environment (streamlit pulls in a numpy version that the solver env does not want):
+#
+#   python3 -m venv .env_dashboard
+#   .env_dashboard/bin/pip install -r scripts/dashboard/requirements.txt
+#
+streamlit >= 1.30

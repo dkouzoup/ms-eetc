@@ -8,12 +8,21 @@ import re
 from mseetc.estimator import forceEstimator, energyEstimator
 from mseetc.utils import get_power_loss_function
 
+from runMetadata import createRunDirectory, describeTrain, findRunWithSameInputs, getGitCommit, \
+    hashInputs, removeRun, resolveDuplicateRun, writeMetadata
 from wrapperConfig import loadConfig
 
 INTERVALS_PER_METER = 400/3000
 
 
 def getTargetDf(file, trainLength, df_stationDict):
+
+    """
+    Read one odometry recording and map it onto track positions.
+
+    Returns the measured trajectory and the station pair it covers, the latter
+    being needed to line the recording up with the corresponding journey section.
+    """
 
     pattern = re.compile(
         r"^odometry_(?P<id>[^_]+)_(?P<from_station>[^_]+)_(?P<to_station>[^_]+)\.csv$",
@@ -85,7 +94,14 @@ def getTargetDf(file, trainLength, df_stationDict):
     targetDf = targetDf[~targetDf.index.duplicated(keep="first")]  # needs strictly monotone increasing times
     targetDf = targetDf[targetDf["Position [m]"].diff().fillna(1) > 0]  # needs strictly monotone increasing positions
 
-    return targetDf
+    info = {
+        "fromStation": fromStation,
+        "toStation": toStation,
+        "positionStart [m]": float(positionFromStation),
+        "positionEnd [m]": float(postionToStation),
+    }
+
+    return targetDf, info
 
 
 if __name__ == '__main__':
@@ -111,10 +127,14 @@ if __name__ == '__main__':
 
     Only make changes in config.json (copy config.example.json to get started).
 
-    Results are saved in a new directory called "estimator" located in the input folder (directory).
+    Results are saved in a new timestamped directory under "estimator" in the input folder
+    (directory), so that runs with different parameters can be compared instead of
+    overwriting each other. Should a run with exactly the same inputs already exist, it
+    can be replaced instead.
     Per journey section the resulting estimated trajectory is saved in a pickle file -
     one for the force and one for the energy estimation.
-    For easy data access, estimated energy consumption per section is saved in a csv file.
+    All parameters of the run and the resulting energy consumption per section are saved
+    in metadata.json (read by the dashboard).
     """
 
     from mseetc.train import Train
@@ -125,6 +145,8 @@ if __name__ == '__main__':
     ### Input (edit config.json, see config.example.json)
     config = loadConfig()
 
+    losses = 'static' # TODO: FIXME
+
     directory = config['directory']
     stationDict = config['stationDict']
     trainDirectory = config['trainDirectory']
@@ -134,15 +156,38 @@ if __name__ == '__main__':
     ####################################################################################################################
 
 
-    # Results Folder
-    estimatorDirectory = Path(directory) / "estimator"
-    estimatorDirectory.mkdir(exist_ok=True)
+    # everything that determines the results, and therefore the identity of the run
+    inputs = {
+        "directory": directory,
+        "stationDict": stationDict,
+        "trainDirectory": trainDirectory,
+        "trainId": trainId,
+        "trackDirectory": trackDirectory,
+        "trackId": trackId,
+        "losses": {"estimator": losses},
+        "discretization": {"intervalsPerMeter": INTERVALS_PER_METER},
+        "train": {"withPnBrake": withPnBrake},
+    }
+
+    inputsHash = hashInputs(inputs)
+
+    # Results Folder: one timestamped directory per run
+    runsDirectory = Path(directory) / "estimator"
+
+    duplicate = findRunWithSameInputs(runsDirectory, inputsHash)
+    supersededRun = duplicate if duplicate and resolveDuplicateRun(duplicate) == 'replace' else None
+
+    estimatorDirectory = createRunDirectory(runsDirectory)
+    print(f"Results of this run are saved in {estimatorDirectory}")
 
     # Train
     train = Train(config={'id':trainId}, pathJSON=trainDirectory)
-    train.forceMinPn = 0
-    train.withPnBrake = False
-    train.powerLosses = get_power_loss_function(train, "static")
+
+    if not withPnBrake:
+
+        train.forceMinPn = 0  # the solver reads the flag off this, see Train.exportModel
+
+    train.powerLosses = get_power_loss_function(train, losses)
 
     # Station Dict
     stationDictPath = Path(directory) / stationDict
@@ -159,10 +204,11 @@ if __name__ == '__main__':
 
     csvFiles = list(Path(directory).glob("odometry_*.csv"))
 
-    energyResults = []
+    sectionMetadata = []  # parameters, stats and energies per journey section
+
     for sectionId in range(len(csvFiles)):
 
-        targetDf = getTargetDf(csvFiles[sectionId], train.length, df_stationDict)
+        targetDf, sectionInfo = getTargetDf(csvFiles[sectionId], train.length, df_stationDict)
 
         track = Track(config={'id': trackId}, pathJSON=trackDirectory)
         track.updateTrainLengthDependentValues(train)
@@ -187,11 +233,31 @@ if __name__ == '__main__':
         energyFile = estimatorDirectory / f"{name}_df_energy_estimate.pkl"
         pd.to_pickle(energyStats, energyFile)
 
-        energyResults.append({
-            "File": name,
-            "Energy [kWh]": energyStats["Net energy used [kWh]"]
+        sectionMetadata.append({
+            "index": sectionId,
+            "name": name,
+            "source": csvFiles[sectionId].name,
+            "file": forceFile.name,
+            "energyFile": energyFile.name,
+            "numIntervals": numOfIntervals,
+            "solverOptions": optsDict,
+            **energyStats,  # used, regenerated and net energy, plus the losses
+            **sectionInfo,
         })
 
-    energyFile = estimatorDirectory / "energyStats.csv"
-    energyResultsDf = pd.DataFrame(energyResults)
-    energyResultsDf.to_csv(energyFile, index=False)
+    # save all parameters and results of the run, so that they stay interpretable later on
+    writeMetadata(estimatorDirectory, {
+        "type": "estimator",
+        "script": Path(__file__).name,
+        "inputsHash": inputsHash,
+        "gitCommit": getGitCommit(),
+        "inputs": inputs,
+        "train": describeTrain(train),
+        "sections": sectionMetadata,
+    })
+
+    print(f"Wrote {len(sectionMetadata)} sections and metadata.json to {estimatorDirectory}")
+
+    if supersededRun is not None:
+
+        removeRun(supersededRun)  # only now that the new results are safely in place
