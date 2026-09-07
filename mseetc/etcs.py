@@ -68,7 +68,7 @@ def getEtcsSpeedLimits(train, track, positionStep=20.0):
         pCurves.append(curveSet["P"])
 
     # Build common position grid
-    positions = np.arange(0.0, track.length + positionStep, positionStep)
+    positions = np.append(np.arange(0.0, track.length, positionStep), track.length)
     positions = np.union1d(positions, speedLimitPositions)
     positions = np.sort(positions)
 
