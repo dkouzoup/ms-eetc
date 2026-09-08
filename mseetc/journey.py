@@ -164,6 +164,56 @@ class Journey():
         return self.completeTimingPoints.iloc[idxStart:idxEnd + 1].copy()
 
 
+    def reverse(self, trackLength):
+
+        """
+        Switch to the opposite trip.
+
+        Positions are mirrored on the track, so that they refer to the reversed track,
+        and the time constraints are mirrored on the duration of the journey, which gives
+        the sections of the return trip the durations of the outbound ones in reverse
+        order. A return service whose timetable is not the mirror image of the outbound
+        one needs a journey file of its own.
+
+        Parameters
+        ----------
+        trackLength : float
+            Length of the track the journey is defined on, in meters.
+        """
+
+        points = self.completeTimingPoints
+
+        positions = points.index.to_numpy(dtype=float)
+
+        if positions[-1] > trackLength:
+
+            raise ValueError("Journey '{}' reaches {} m, beyond the {} m of its track!".format(
+                self.id, positions[-1], trackLength))
+
+        timeKeys = ["Lower time constraint [s]", "Upper time constraint [s]"]
+
+        duration = max(value for key in timeKeys for value in points[key] if self.isSet(value))
+
+        mirrored = points.iloc[::-1].copy()
+        mirrored.index = trackLength - positions[::-1]
+        mirrored.index.name = points.index.name
+
+        lower, upper = (mirrored[key].copy() for key in timeKeys)
+
+        mirrorTime = lambda value: duration - value if self.isSet(value) else value
+
+        # a lower bound counted from the start becomes an upper bound counted from the end
+        mirrored[timeKeys[0]] = upper.apply(mirrorTime)
+        mirrored[timeKeys[1]] = lower.apply(mirrorTime)
+
+        self.completeTimingPoints = mirrored
+        self.journeySectionBounds = self.getJourneySectionBounds()
+
+        self.selectJourneySection(0)
+
+        return self
+
+
     def getTimeOffset(self):
 
         firstPoint = self.timingPoints.iloc[0]
