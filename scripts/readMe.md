@@ -87,6 +87,31 @@ overlay measured recordings with optimized trajectories.
 Directories written before this layout existed (results lying directly in `ocp/` or
 `estimator/`) are still readable by the dashboard, but without parameters or track offsets.
 
+### Round trips
+
+With `roundTrip = True` the wrapper computes the return trip in the same run, so that the
+energy of a full round trip can be read off directly. The track is reversed with
+`Track.reverse()` and the journey with `Journey.reverse()`, which mirrors the timing points
+on the track and the time constraints on the duration of the journey: the return legs get the
+durations and dwell times of the outbound ones in reverse order.
+
+> A return service whose timetable is not the mirror image of the outbound one needs a
+> journey file of its own. Point `journeyId` at it and leave `roundTrip` off.
+
+Sections are numbered along the trip and carry the direction they belong to:
+
+```text
+index  name        direction  distanceOffset [m]
+    0  forward 0   forward                   0.0
+    3  forward 3   forward               11828.9
+    4  reverse 0   reverse               17220.7
+    7  reverse 3   reverse               30532.3
+```
+
+`distanceOffset [m]` is the distance covered before a section starts, which lays the whole
+trip out on one continuous axis. The return legs mirror the outbound ones, so `reverse 0`
+covers the same stretch of line as `forward 3`.
+
 ### Repeated runs
 
 Everything that determines the results of a run - the ids and directories it reads, the loss
@@ -131,6 +156,13 @@ Point the "Data directory" field in the sidebar at any directory holding results
 for `ocp` and `estimator` run folders. Select any number of runs to overlay them, and use
 the track-wide position axis to see a whole journey, or a per-section axis to compare
 sections against each other.
+
+For a round trip, the `Distance traveled [km]` axis lays the outbound and return legs out in
+a row and marks the turnaround with a dashed vertical line, rather than folding the two
+directions onto the same positions.
+
+Dragging over any chart zooms every chart to that range, so the force and power below a
+speed profile show the same stretch of the trip; "Reset zoom" restores the full extent.
 
 Since runs are named only by their timestamp, the "Filters" section of the sidebar narrows
 the list down by kind and by any parameter that is not the same across all runs - selecting

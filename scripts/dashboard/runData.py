@@ -35,6 +35,8 @@ class Section:
     timeOffset: float = 0.0
     absolutePositions: bool = False  # estimator results are already given in track coordinates
     withEtcsBrakingCurves: bool = False
+    direction: str = None  # 'forward' or 'reverse' for a round trip, None for a one-way run
+    distanceOffset: float = None  # distance covered before this section, along the whole trip
     speedLimits: dict = None  # step function {'Position [m]': [...], 'Speed limit [m/s]': [...]}
     info: dict = field(default_factory=dict)
 
@@ -58,6 +60,13 @@ class Run:
         "True for result directories written before metadata.json was introduced."
 
         return self.metadata is None
+
+    @property
+    def isComplete(self):
+        "False while a run is still going, or if it stopped before its last section."
+
+        return bool((self.metadata or {}).get('complete', True))
+
 
     @property
     def label(self):
@@ -204,6 +213,8 @@ def readSections(path, kind, metadata):
                 timeOffset=entry.get('timeOffset [s]', 0.0) or 0.0,
                 absolutePositions=kind == 'estimator',
                 withEtcsBrakingCurves=bool((entry.get('solverOptions') or {}).get('withEtcsBrakingCurves')),
+                direction=entry.get('direction'),
+                distanceOffset=entry.get('distanceOffset [m]'),
                 speedLimits=entry.get('speedLimits'),
                 info=entry,
             ))
@@ -263,5 +274,10 @@ def loadSection(section):
     df['Position (abs) [m]'] = df['Position [m]'] + offset
 
     df['Time (abs) [s]'] = df['Time [s]'] + (section.timeOffset or 0.0)
+
+    if section.distanceOffset is not None:
+
+        # lays the sections of a trip out in a row, the return trip continuing the outbound one
+        df['Distance traveled [m]'] = df['Position [m]'] + section.distanceOffset
 
     return addSpeedLimits(df, section)

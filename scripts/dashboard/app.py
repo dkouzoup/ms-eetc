@@ -28,6 +28,13 @@ from runData import findRuns, loadSection
 
 CHART_HEIGHT = 320
 
+# the x range every chart is zoomed to, set by dragging over any one of them
+ZOOM_KEY = 'xRange'
+
+# bumped whenever that range changes, to give the charts keys they have never had before
+# and so leave them without a stale brush drawn over them
+ZOOM_GENERATION = 'zoomGeneration'
+
 # energy quantities the wrappers report, in the order in which they are offered
 ENERGY_COLUMNS = ['Energy SIM [kWh]', 'Energy OCP [kWh]', 'Net energy used [kWh]',
     'Used energy [kWh]', 'Regenerated energy [kWh]', 'Drive train losses [kWh]',
@@ -69,19 +76,38 @@ def cachedRuns(root, treeKey):
 
 
 @st.cache_data(show_spinner=False)
-def cachedTrajectory(path, positionStart, timeOffset, absolutePositions, withEtcs, mtime):
+def cachedTrajectory(path, positionStart, timeOffset, absolutePositions, withEtcs,
+    distanceOffset, mtime):
 
     from runData import Section
 
     return loadSection(Section(index=0, name='', path=Path(path), positionStart=positionStart,
         timeOffset=timeOffset, absolutePositions=absolutePositions,
-        withEtcsBrakingCurves=withEtcs))
+        withEtcsBrakingCurves=withEtcs, distanceOffset=distanceOffset))
 
 
 def trajectoryOf(section):
 
     return cachedTrajectory(str(section.path), section.positionStart, section.timeOffset,
-        section.absolutePositions, section.withEtcsBrakingCurves, section.path.stat().st_mtime)
+        section.absolutePositions, section.withEtcsBrakingCurves, section.distanceOffset,
+        section.path.stat().st_mtime)
+
+
+def turnaroundDistances(runs):
+    "Distance at which the return trip starts, for the runs that cover both directions."
+
+    distances = set()
+
+    for run in runs:
+
+        offsets = [s.distanceOffset for s in run.sections
+            if s.direction == 'reverse' and s.distanceOffset is not None]
+
+        if offsets:
+
+            distances.add(min(offsets))
+
+    return sorted(distances)
 
 
 def speedLimitSeries(section, df):
@@ -249,7 +275,7 @@ if st.sidebar.button('Rescan', width='stretch'):
 
     st.cache_data.clear()
 
-root = Path(searchRoot).expanduser()
+root = Path(searchRoot.strip()).expanduser()  # a pasted path often brings whitespace along
 
 if not root.is_dir():
 
@@ -289,8 +315,9 @@ with st.sidebar.expander('Filters'):
         help='Keep only the runs whose parameter has one of the selected values, '
              'e.g. solver.withEtcsBrakingCurves.')
 
-    wanted = st.multiselect('Value', sorted(values.get(parameter, [])),
-        default=sorted(values.get(parameter, []))) if parameter != '(none)' else None
+    choices = sorted(values.get(parameter, []))
+
+    wanted = st.multiselect('Value', choices, default=choices) if choices else None
 
 matching = [run for run in runs if run.kind in kinds
     and (wanted is None or str(parameterTables[run.name].get(parameter)) in wanted)]
@@ -300,14 +327,14 @@ if not matching:
     st.sidebar.warning('No run matches the filters.')
 
 selectedNames = st.sidebar.multiselect('Runs to compare', [run.name for run in matching],
-    default=[run.name for run in matching][:2],
     help='Each entry is one timestamped output directory of a wrapper.')
 
 selectedRuns = [runsByName[name] for name in selectedNames]
 
 if not selectedRuns:
 
-    st.info('Select at least one run in the sidebar.')
+    st.info(f"Found {len(matching)} run(s) in `{root}`. Select one or more in the sidebar "
+        "to plot them.")
     st.stop()
 
 sectionOptions = sorted({sectionLabel(s) for run in selectedRuns for s in run.sections if s.hasTrajectory})
@@ -326,8 +353,16 @@ showLimits = st.sidebar.multiselect('Overlay on velocity', sig.LIMIT_SIGNALS,
          'track, adapted to the train length; the ETCS braking curves are what the '
          'trajectory is actually constrained with when they are enabled.')
 
-combineSections = st.sidebar.checkbox('All sections in one chart', value=xAxis.startswith('Position (track)'),
-    help='Only meaningful on a track-wide axis, where sections do not overlap.')
+combineSections = st.sidebar.checkbox('All sections in one chart',
+    value=xAxis.startswith(('Distance traveled', 'Position (track)')),
+    help='Only meaningful on an axis spanning the whole trip, where sections do not overlap.')
+
+incomplete = [run.name for run in selectedRuns if not run.isComplete]
+
+if incomplete:
+
+    st.sidebar.warning('Still running or stopped early, so some sections are missing: '
+        + ', '.join(incomplete))
 
 legacyRuns = [run.name for run in selectedRuns if run.isLegacy and run.kind == 'ocp']
 
@@ -417,12 +452,22 @@ def collectData():
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def lineChart(data, signalName):
+def lineChart(data, signalName, xRange=None):
+
+    """
+    One signal against the current x-axis.
+
+    Dragging over a chart selects a range of the axis, which every chart is then drawn
+    with, so that the plots below a speed profile show the same stretch of the trip.
+    """
 
     interpolate = 'step-after' if signalName in sig.STEP_SIGNALS else 'linear'
 
+    scale = alt.Scale(zero=False, nice=False, domain=list(xRange)) if xRange else \
+        alt.Scale(zero=False, nice=False)
+
     encoding = dict(
-        x=alt.X('x:Q', title=xAxis, scale=alt.Scale(zero=False, nice=False)),
+        x=alt.X('x:Q', title=xAxis, scale=scale),
         y=alt.Y('y:Q', title=signalName, scale=alt.Scale(zero=False)),
         color=alt.Color('Series:N', title=None,
             legend=alt.Legend(orient='top', columns=2, labelLimit=400)),
@@ -437,13 +482,80 @@ def lineChart(data, signalName):
     limits = data[isLimit]
     trajectories = data[~isLimit]
 
-    chart = alt.Chart(trajectories).mark_line(interpolate=interpolate).encode(**encoding)
+    chart = alt.Chart(trajectories).mark_line(interpolate=interpolate, clip=True).encode(**encoding)
 
     if not limits.empty:
 
-        chart += alt.Chart(limits).mark_line(interpolate='step-after', strokeDash=[6, 3]).encode(**encoding)
+        chart += alt.Chart(limits).mark_line(interpolate='step-after', strokeDash=[6, 3],
+            clip=True).encode(**encoding)
 
-    return chart.properties(height=CHART_HEIGHT).interactive(bind_y=False)
+    turnarounds = turnaroundDistances(selectedRuns) if xAxis.startswith('Distance traveled') else []
+
+    if turnarounds:
+
+        # from here on the train is on its way back
+        marks = pd.DataFrame({'x': [distance*1e-3 for distance in turnarounds]})
+
+        chart += alt.Chart(marks).mark_rule(strokeDash=[2, 2], color='gray', size=2,
+            clip=True).encode(x=alt.X('x:Q'),
+            tooltip=alt.Tooltip('x:Q', title='Return trip starts [km]', format='.2f'))
+
+    brush = alt.selection_interval(encodings=['x'], name='brush')
+
+    return chart.properties(height=CHART_HEIGHT).add_params(brush)
+
+
+def selectedRange(event):
+    "The x range a viewer dragged over a chart, if any."
+
+    selection = getattr(event, 'selection', None) or {}
+
+    candidates = [selection] + [value for value in selection.values() if isinstance(value, dict)]
+
+    for candidate in candidates:
+
+        bounds = candidate.get('x')
+
+        if bounds is not None and len(bounds) == 2:
+
+            return min(bounds), max(bounds)
+
+    return None
+
+
+def applyRange(xRange):
+    "Zoom every chart to a range, or reset them all when given None."
+
+    if xRange is None:
+
+        st.session_state.pop(ZOOM_KEY, None)
+
+    else:
+
+        st.session_state[ZOOM_KEY] = xRange
+
+    st.session_state[ZOOM_GENERATION] = st.session_state.get(ZOOM_GENERATION, 0) + 1
+
+    st.rerun()
+
+
+def showChart(chart, key):
+
+    """
+    Draw a chart and adopt any range dragged over it.
+
+    Every chart of the page is redrawn with that range, which is what ties the plots
+    below a speed profile to the stretch of trip being looked at.
+    """
+
+    event = st.altair_chart(chart, width='stretch', on_select='rerun',
+        key=f"{key}-{st.session_state.get(ZOOM_GENERATION, 0)}")
+
+    chosen = selectedRange(event)
+
+    if chosen is not None and chosen != st.session_state.get(ZOOM_KEY):
+
+        applyRange(chosen)
 
 
 ############################################################################
@@ -465,6 +577,22 @@ with trajectoriesTab:
 
     else:
 
+        xRange = st.session_state.get(ZOOM_KEY)
+
+        if xRange is not None:
+
+            zoomed, reset = st.columns([4, 1])
+            zoomed.caption(f"Zoomed to {xRange[0]:.3f} - {xRange[1]:.3f} of {xAxis}. "
+                'Drag over a chart to zoom further, all charts follow.')
+
+            if reset.button('Reset zoom', width='stretch'):
+
+                applyRange(None)
+
+        else:
+
+            st.caption('Drag over a chart to zoom every chart to that range.')
+
         for name in signalNames:
 
             signalData = data[data['Signal'] == name]
@@ -478,15 +606,15 @@ with trajectoriesTab:
 
             if combineSections:
 
-                st.altair_chart(lineChart(signalData, name), width='stretch')
+                showChart(lineChart(signalData, name, xRange), f"chart-{name}")
 
             else:
 
                 for label in sorted(signalData['Section'].unique()):
 
                     st.caption(f"Section {label}")
-                    st.altair_chart(lineChart(signalData[signalData['Section'] == label], name),
-                        width='stretch')
+                    showChart(lineChart(signalData[signalData['Section'] == label], name, xRange),
+                        f"chart-{name}-{label}")
 
 with energyTab:
 
@@ -516,7 +644,7 @@ with energyTab:
 
         energies = {run.name: energyPerSection(run, column) for run in selectedRuns}
 
-        # sections of the sidebar selection, labelled by the reference run where possible
+        # sections of the sidebar selection, labeled by the reference run where possible
         labels = {}
 
         for run in [baseline] + others:

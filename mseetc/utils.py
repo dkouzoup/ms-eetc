@@ -125,29 +125,43 @@ class IVP():
 
         f = var('force')
         gd = var('gradient')
+        gdl = var('gradientLinearTerm')
         cr = var('curvature')
+        crl = var('curvatureLinearTerm')
+        tnf = var('tunnelFactor')
+        sRef = var('sRef')  # position the track attributes are linearized around
         dt = var('dt')
         m = var('mass') if lossesFun is not None else []
 
+        # track attributes vary linearly within the interval
+        gradient = gd + gdl*(s - sRef)
+        curvature = cr + crl*(s - sRef)
+
         rollingResistance = model.sr0 + model.sr1*v + model.sr2*v**2
-        curvatureResistance = ca.if_else(ca.fabs(cr)<=1/300, model.g*0.5*ca.fabs(cr)/(1-30*ca.fabs(cr)),
-                                         model.g*0.65*ca.fabs(cr)/(1-55*ca.fabs(cr)))
-        acceleration = f - rollingResistance - model.g*gd*(1/model.rho) - curvatureResistance*(1/model.rho)
+        curvatureResistance = ca.if_else(ca.fabs(curvature)<=1/300, model.g*0.5*ca.fabs(curvature)/(1-30*ca.fabs(curvature)),
+                                         model.g*0.65*ca.fabs(curvature)/(1-55*ca.fabs(curvature)))
+        tunnelResistance = tnf*v**2
+        acceleration = f - rollingResistance - model.g*gradient*(1/model.rho) - curvatureResistance*(1/model.rho) - tunnelResistance
 
         ode = ca.vertcat(dt*v, dt*acceleration, dt*lossesFun(f*m, v)/m if lossesFun is not None else [])
         t0, tf = 0, 1
-        self.fun = ca.integrator('integrator', 'cvodes', {'x':ca.vertcat(s,v,e), 'p':ca.vertcat(f,gd,cr,dt,m), 'ode':ode}, t0, tf,
+        self.fun = ca.integrator('integrator', 'cvodes', {'x':ca.vertcat(s,v,e), 'p':ca.vertcat(f,gd,gdl,cr,crl,tnf,sRef,dt,m), 'ode':ode}, t0, tf,
                                  {'abstol':1e-12, 'reltol':1e-14})
         self.withLosses = lossesFun is not None
 
 
-    def solve(self, tf, t0=0, f=0, grd=0, cr=0, v0=0, s0=0, m=None):
+    def solve(self, tf, t0=0, f=0, grd=0, grdLin=0, cr=0, crLin=0, tunnelFactor=0, sRef=None, v0=0, s0=0, m=None):
 
         if m is None and self.withLosses:
 
             raise ValueError("Need to specify total mass when integrating losses!")
 
-        out = self.fun(x0=[s0, v0]+([0] if self.withLosses else []), p=[f, grd, cr, tf-t0] + ([m] if self.withLosses else []))['xf']
+        if sRef is None:
+
+            sRef = s0
+
+        out = self.fun(x0=[s0, v0]+([0] if self.withLosses else []),
+                       p=[f, grd, grdLin, cr, crLin, tunnelFactor, sRef, tf-t0] + ([m] if self.withLosses else []))['xf']
 
         sf = vecToNum(out[0])
         vf = vecToNum(out[1])
@@ -157,7 +171,11 @@ class IVP():
         self.tf = tf
         self.f = f
         self.grd = grd
+        self.grdLin = grdLin
         self.cr = cr
+        self.crLin = crLin
+        self.tunnelFactor = tunnelFactor
+        self.sRef = sRef
         self.s0 = s0
         self.sf = sf
         self.v0 = v0
@@ -167,12 +185,16 @@ class IVP():
         return sf, vf
 
 
-def simulateCVODES(dfIn, model, totalMass, accumulatedErrors=True):
+def simulateCVODES(dfIn, model, totalMass, tunnelFactors=None, accumulatedErrors=True):
     "Simulate optimal controls with CVODES integrator to compare integration errors."
 
     numIntervals = len(dfIn) - 1
     posCVODES = [dfIn['Position [m]'].iloc[0]]
     velCVODES = [dfIn['Velocity [m/s]'].iloc[0]]
+
+    if tunnelFactors is None:
+
+        tunnelFactors = np.zeros(len(dfIn))
 
     ivp = IVP(model)
 
@@ -183,8 +205,14 @@ def simulateCVODES(dfIn, model, totalMass, accumulatedErrors=True):
         pos = posCVODES[-1] if accumulatedErrors else dfIn['Position [m]'].iloc[ii]
         vel = velCVODES[-1] if accumulatedErrors else dfIn['Velocity [m/s]'].iloc[ii]
 
-        posNxt, velNxt = ivp.solve(tf=dt, f=dfIn['Force [N]'].iloc[ii]/totalMass, grd=dfIn['Gradient [permil]'].iloc[ii]/1e3,
-                                   cr=dfIn['Curvature [1/m]'].iloc[ii], v0=vel, s0=pos)
+        posNxt, velNxt = ivp.solve(tf=dt, f=dfIn['Force [N]'].iloc[ii]/totalMass,
+                                   grd=dfIn['Gradient [permil]'].iloc[ii]/1e3,
+                                   grdLin=dfIn['Gradient linear term [permil/m]'].iloc[ii]/1e3,
+                                   cr=dfIn['Curvature [1/m]'].iloc[ii],
+                                   crLin=dfIn['Curvature linear term [1/m^2]'].iloc[ii],
+                                   tunnelFactor=tunnelFactors[ii],
+                                   sRef=dfIn['Position [m]'].iloc[ii],
+                                   v0=vel, s0=pos)
 
         posCVODES += [posNxt]
         velCVODES += [velNxt]
@@ -239,6 +267,7 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
     dfOut['Curvature [1/m]'] = points['Curvature [1/m]'].values
     dfOut['Curvature linear term [1/m^2]'] = points['Curvature linear term [1/m^2]'].values
     dfOut['CrossSection [m^2]'] = points['CrossSection [m^2]'].values
+    tunnelFactors = computeTunnelFactor(dfOut['CrossSection [m^2]'].values, train, opts)
     dfOut['Force (acc) [N]'] = dfOut['Force (el) [N]']*(dfOut['Force (el) [N]'] >= 0)
     dfOut['Force (rgb) [N]'] = dfOut['Force (el) [N]']*(dfOut['Force (el) [N]'] < 0)
     dfOut['Force [N]'] = dfOut['Force (acc) [N]'] + dfOut['Force (rgb) [N]'] + dfOut['Force (pnb) [N]']
@@ -284,8 +313,6 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
         gl = (dfOut['Gradient linear term [permil/m]']/1e3).values.tolist()
         cr = dfOut['Curvature [1/m]'].values.tolist()
         cl = dfOut['Curvature linear term [1/m^2]'].values.tolist()
-        cs = dfOut['CrossSection [m^2]'].values.tolist()
-        tf = computeTunnelFactor(cs, train, opts)
 
         losses = []
 
@@ -293,7 +320,7 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
 
             dt = ts[jj+1]-ts[jj]
 
-            eTr, eRgb = trainIntegrator.calcLosses(vs[jj], dt, 0, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
+            eTr, eRgb = trainIntegrator.calcLosses(vs[jj], dt, 0, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tunnelFactors[jj])
 
             eEl = eTr if fs[jj] >= 0 else eRgb
 
@@ -321,8 +348,6 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
         gl = (dfOut['Gradient linear term [permil/m]'] / 1e3).values.tolist()
         cr = dfOut['Curvature [1/m]'].values.tolist()
         cl = dfOut['Curvature linear term [1/m^2]'].values.tolist()
-        cs = dfOut['CrossSection [m^2]'].values.tolist()
-        tf = computeTunnelFactor(cs, train, opts)
 
         rr = []
 
@@ -330,7 +355,7 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
 
             ds = ss[jj+1]-ss[jj]
 
-            loss, _ = trainIntegrator.calcRollingResistance(vs[jj], ds, 0, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tf[jj])
+            loss, _ = trainIntegrator.calcRollingResistance(vs[jj], ds, 0, fs[jj], ps[jj], gs[jj], gl[jj], cr[jj], cl[jj], tunnelFactors[jj])
 
             rr.append(totalMass*vecToNum(loss))
 
@@ -343,12 +368,13 @@ def postProcessDataFrame(dfIn, points, train, opts, CVODES=True, integrateLosses
     rollingResistance = dfOut['Velocity [m/s]'].apply(rrFun)
     gradientResistance = train.g*(dfOut['Gradient [permil]']/1000)/train.rho
     curvatureResistance = dfOut['Curvature [1/m]'].apply(crFun)
+    tunnelResistance = tunnelFactors*dfOut['Velocity [m/s]']**2
 
-    dfOut['Acceleration [m/s^2]'] = dfOut['Force [N]']/totalMass - rollingResistance - gradientResistance - curvatureResistance
+    dfOut['Acceleration [m/s^2]'] = dfOut['Force [N]']/totalMass - rollingResistance - gradientResistance - curvatureResistance - tunnelResistance
 
     if CVODES:
 
-        dfOut = simulateCVODES(dfOut, train.exportModel(), totalMass)
+        dfOut = simulateCVODES(dfOut, train.exportModel(), totalMass, tunnelFactors=tunnelFactors)
 
     return dfOut
 

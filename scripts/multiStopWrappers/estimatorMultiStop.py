@@ -206,6 +206,22 @@ if __name__ == '__main__':
 
     sectionMetadata = []  # parameters, stats and energies per journey section
 
+    def saveMetadata(complete):
+        "Write the metadata as it stands, so an interrupted run still describes its results."
+
+        writeMetadata(estimatorDirectory, {
+            "type": "estimator",
+            "script": Path(__file__).name,
+            "inputsHash": inputsHash,
+            "complete": complete,
+            "gitCommit": getGitCommit(),
+            "inputs": inputs,
+            "train": describeTrain(train),
+            "sections": sectionMetadata,
+        })
+
+    saveMetadata(complete=False)
+
     for sectionId in range(len(csvFiles)):
 
         targetDf, sectionInfo = getTargetDf(csvFiles[sectionId], train.length, df_stationDict)
@@ -245,16 +261,9 @@ if __name__ == '__main__':
             **sectionInfo,
         })
 
-    # save all parameters and results of the run, so that they stay interpretable later on
-    writeMetadata(estimatorDirectory, {
-        "type": "estimator",
-        "script": Path(__file__).name,
-        "inputsHash": inputsHash,
-        "gitCommit": getGitCommit(),
-        "inputs": inputs,
-        "train": describeTrain(train),
-        "sections": sectionMetadata,
-    })
+        saveMetadata(complete=False)
+
+    saveMetadata(complete=True)
 
     print(f"Wrote {len(sectionMetadata)} sections and metadata.json to {estimatorDirectory}")
 

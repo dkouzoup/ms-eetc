@@ -8,6 +8,7 @@ raw columns it needs, so that the dashboard only offers what a given run contain
 """
 
 X_AXES = {
+    'Distance traveled [km]': ('Distance traveled [m]', 1e-3),
     'Position (track) [km]': ('Position (abs) [m]', 1e-3),
     'Position (section) [km]': ('Position [m]', 1e-3),
     'Time (journey) [s]': ('Time (abs) [s]', 1),
