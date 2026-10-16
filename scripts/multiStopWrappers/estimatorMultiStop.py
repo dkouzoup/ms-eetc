@@ -8,8 +8,8 @@ import re
 from mseetc.estimator import forceEstimator, energyEstimator
 from mseetc.utils import get_power_loss_function
 
-from runMetadata import createRunDirectory, describeTrain, findRunWithSameInputs, getGitCommit, \
-    hashInputs, removeRun, resolveDuplicateRun, writeMetadata
+from runMetadata import createRunDirectory, describeTrain, describeTunnels, findRunWithSameInputs, \
+    getGitCommit, hashInputs, removeRun, resolveDuplicateRun, writeMetadata
 from wrapperConfig import loadConfig
 
 INTERVALS_PER_METER = 400/3000
@@ -147,6 +147,8 @@ if __name__ == '__main__':
 
     losses = 'static' # TODO: FIXME
 
+    withPnBrake = False
+
     directory = config['directory']
     stationDict = config['stationDict']
     trainDirectory = config['trainDirectory']
@@ -257,6 +259,8 @@ if __name__ == '__main__':
             "energyFile": energyFile.name,
             "numIntervals": numOfIntervals,
             "solverOptions": optsDict,
+            # the stretches the section runs in a tunnel, in track coordinates like the trajectory
+            "tunnels": describeTunnels(track),
             **energyStats,  # used, regenerated and net energy, plus the losses
             **sectionInfo,
         })

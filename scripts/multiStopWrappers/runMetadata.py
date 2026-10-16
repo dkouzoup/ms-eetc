@@ -205,3 +205,44 @@ def describeTrain(train):
         'forceMax', 'forceMin', 'forceMinPn', 'accMax', 'accMin', 'etaTraction', 'etaRgBrake']
 
     return {key: getattr(train, key) for key in keys if hasattr(train, key)}
+
+
+def describeTunnels(track):
+
+    """
+    Tunnels of a track, as the stretches a trajectory runs through them.
+
+    The cross sections are a step function over the track, infinite on open track, so
+    every step with a finite cross section is a stretch of tunnel. Contiguous steps of
+    equal cross section are merged; a tunnel that changes its cross section stays split
+    at the position where it does.
+
+    Taken off the track as the run prepared it - cropped to the journey section, reversed
+    for a return trip and adapted to the train length - so the positions are those of the
+    trajectory, and a run planned on a track without tunnels reports none.
+    """
+
+    crossSections = track.crossSections['CrossSection [m^2]']
+
+    positions = crossSections.index.values
+    ends = np.append(positions[1:], track.length)  # the last step runs to the end of the track
+
+    tunnels = []
+
+    for start, end, area in zip(positions, ends, crossSections.values):
+
+        if not np.isfinite(area) or end <= start:
+
+            continue
+
+        if tunnels and tunnels[-1]['cross section [m^2]'] == float(area) \
+                and tunnels[-1]['end [m]'] == float(start):
+
+            tunnels[-1]['end [m]'] = float(end)  # same tunnel, cropping or the train length split it
+
+            continue
+
+        tunnels.append({'start [m]': float(start), 'end [m]': float(end),
+            'cross section [m^2]': float(area)})
+
+    return tunnels

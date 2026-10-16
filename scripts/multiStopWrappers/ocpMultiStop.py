@@ -8,8 +8,8 @@ import pandas as pd
 from mseetc.ocp import casadiSolver
 from mseetc.utils import get_power_loss_function, postProcessDataFrame
 
-from runMetadata import createRunDirectory, describeTrain, findRunWithSameInputs, getGitCommit, \
-    hashInputs, removeRun, resolveDuplicateRun, writeMetadata
+from runMetadata import createRunDirectory, describeTrain, describeTunnels, findRunWithSameInputs, \
+    getGitCommit, hashInputs, removeRun, resolveDuplicateRun, writeMetadata
 from tunnelAgnostic import estimateEnergyOnTrack, removeTunnels, reportForceLimitViolations
 from wrapperConfig import loadConfig
 
@@ -42,11 +42,11 @@ if __name__ == '__main__':
 
     #### INPUT #################################################################
 
-    losses_ocp = 'dynamic'
+    losses_ocp = 'perfect'
     losses_sim = 'dynamic'
 
     withEtcsBrakingCurves = True
-    tunnelsInOcp = True
+    tunnelsInOcp = False
     withPnBrake = False
     roundTrip = True
     integrationMethod = 'RK'
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     trackDirectory = config['trackDirectory']
     trackId = config['trackId']
     journeyDirectory = config['journeyDirectory']
-    journeyId = config['journeyId']
+    journeys = config['journeys']
     lossesFile = config['lossesFile']  # measured power losses of the train, relative to directory
 
     # everything that determines the results, and therefore the identity of the run
@@ -74,7 +74,7 @@ if __name__ == '__main__':
         "trackDirectory": trackDirectory,
         "trackId": trackId,
         "journeyDirectory": journeyDirectory,
-        "journeyId": journeyId,
+        "journeys": journeys,
         "losses": {
             "ocp": losses_ocp,
             "sim": losses_sim,
@@ -121,12 +121,19 @@ if __name__ == '__main__':
     losses_fun_sim = lossFunctions[losses_sim]()
 
     # Journey
-
-    numOfJourneySections = len(Journey(config={'id':journeyId}, pathJSON=journeyDirectory).journeySectionBounds)
-
-    trackLength = Track(config={'id': trackId}, pathJSON=trackDirectory).length  # to mirror the journey on
+    #
+    # One journey per direction: the return service of a line is a timetable of its own,
+    # in general not the mirror image of the outbound one.
 
     directions = ['forward', 'reverse'] if roundTrip else ['forward']
+
+    for direction in directions:
+
+        assert direction in journeys, (
+            f"No journey given for the '{direction}' direction. "
+            f"'journeys' in config.json needs one journey id per direction: {directions}.")
+
+        print(f"{direction}: journey '{journeys[direction]}'")
 
     sectionMetadata = []  # parameters, stats and energies per journey section
 
@@ -156,15 +163,16 @@ if __name__ == '__main__':
 
     for direction in directions:
 
+        journeyId = journeys[direction]
+
+        numOfJourneySections = len(Journey(config={'id': journeyId},
+                                           pathJSON=journeyDirectory).journeySectionBounds)
+
         for sectionIdx in range(numOfJourneySections):
 
             # new ocp per journey section
 
             journey = Journey(config={'id': journeyId}, pathJSON=journeyDirectory)
-
-            if direction == 'reverse':
-
-                journey.reverse(trackLength)  # the return trip runs the sections in the opposite order
 
             journey.selectJourneySection(sectionIdx)
 
@@ -197,11 +205,13 @@ if __name__ == '__main__':
             distanceOffset += journey.positionEnd - journey.positionStart
 
             # positions in the dataframes are relative to the start of the section. positionStart
-            # maps them back onto the track, which for the return trip is the reversed one, and
-            # distanceOffset lays every section of the trip out on one continuous axis.
+            # maps them back onto the track the journey is defined on, which for the return trip
+            # is the reversed one, and distanceOffset lays every section of the trip out on one
+            # continuous axis.
             section = {
                 "index": len(sectionMetadata),
                 "direction": direction,
+                "journeyId": journeyId,
                 "sectionIdx": sectionIdx,
                 "name": name,
                 "file": f"df_{direction}_section_{sectionIdx}.pkl",
@@ -218,6 +228,8 @@ if __name__ == '__main__':
                     "Position [m]": track.speedLimits.index.tolist(),
                     "Speed limit [m/s]": track.speedLimits['Speed limit [m/s]'].tolist(),
                 },
+                # the stretches the section runs in a tunnel, empty when tunnelsInOcp is off
+                "tunnels": describeTunnels(track),
             }
 
             if df is None:
@@ -244,6 +256,12 @@ if __name__ == '__main__':
 
                 section["Energy SIM [kWh]"] = df_sim["Energy [kWh]"].sum()
 
+                # split by the sign of the force, as the estimator does, so that the two can be priced apart
+                traction = df_sim["Force (el) [N]"] > 0
+
+                section["Used energy [kWh]"] = df_sim.loc[traction, "Energy [kWh]"].sum()
+                section["Regenerated energy [kWh]"] = -df_sim.loc[~traction, "Energy [kWh]"].sum()
+
             else:
 
                 # the ocp never saw the tunnels, so the forces in df are the ones that would hold
@@ -263,6 +281,8 @@ if __name__ == '__main__':
                 dfEstimate.to_pickle(ocpDirectory / section["estimateFile"])
 
                 section["Energy SIM [kWh]"] = energyStats["Net energy used [kWh]"]
+                section["Used energy [kWh]"] = energyStats["Used energy [kWh]"]
+                section["Regenerated energy [kWh]"] = energyStats["Regenerated energy [kWh]"]
                 section["energyEstimate"] = energyStats
 
                 overForce, overPower = reportForceLimitViolations(dfEstimate, train)

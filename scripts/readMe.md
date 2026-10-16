@@ -17,6 +17,7 @@ scripts/
 ├── multiStopWrappers/
 │   ├── config.example.json
 │   ├── estimatorMultiStop.py
+│   ├── journeyFromTimetable.py
 │   ├── ocpMultiStop.py
 │   ├── runMetadata.py
 │   └── wrapperConfig.py
@@ -44,6 +45,9 @@ scripts/
 - **`ocpMultiStop.py`**
   Computes and stores energy-optimal trajectories for all sections of a multi-stop journey.
 
+- **`journeyFromTimetable.py`**
+  Builds the journey files of a line, one per direction, from an operator timetable extract.
+
 - **`runMetadata.py`**
   Creates the timestamped output directory of a run and records its parameters in `metadata.json`.
 
@@ -56,6 +60,43 @@ cp config.example.json config.json
 ```
 
 The keys `trainDirectory`, `trackDirectory` and `journeyDirectory` are optional and default to `directory`.
+
+### Journeys from a timetable
+
+`journeyFromTimetable.py` writes the journey files of a line straight from an operator
+timetable extract, so that the timing points are the operator's own times rather than
+something read off a public timetable by hand:
+
+```bash
+cd scripts/multiStopWrappers
+python journeyFromTimetable.py            # one journey file per direction
+python journeyFromTimetable.py --dry-run  # report what it would write
+```
+
+It reads the extract named by `timetable` in `config.json` (relative to `directory`) and
+the track named by `trackId`, matches the commercial stops of each timetable against the
+`station names` of the track, and writes one journey file per direction, named after the
+timetable it comes from (`S4:RW-SA` becomes `CH_Journeys_S4_RW_SA`). A timetable that runs
+against the station order of the track - the return service - is written with its positions
+mirrored on the track length, ready for use with a reversed track.
+
+Each stop becomes an arrival and a departure stopping point, so there is one journey section
+per stop-to-stop leg. Passing points are dropped: the track does not say where they are.
+
+`--basis` chooses between the two sets of times an extract carries:
+
+| basis | |
+|---|---|
+| `operational` (default) | the second-precision times the operator plans the train to run to |
+| `commercial` | the published times, rounded to whole minutes |
+
+Prefer `operational`. Published times are rounded to the minute, which hides the dwell at
+every stop whose arrival and departure fall in the same minute and leaves every section
+running time uncertain by up to a minute - uncertain in both directions, so some sections
+come out too generous and others too short for the train to actually run, which then has to
+be papered over with running time supplements. Operational times need none of that, but they
+are also markedly tighter: on the S4 they give 6594 s of running time over the trip where
+the commercial ones give 7680 s, the difference being the dwell they no longer hide.
 ### Output layout
 
 Every run writes into its own timestamped directory, so results computed with different
@@ -91,12 +132,17 @@ Directories written before this layout existed (results lying directly in `ocp/`
 
 With `roundTrip = True` the wrapper computes the return trip in the same run, so that the
 energy of a full round trip can be read off directly. The track is reversed with
-`Track.reverse()` and the journey with `Journey.reverse()`, which mirrors the timing points
-on the track and the time constraints on the duration of the journey: the return legs get the
-durations and dwell times of the outbound ones in reverse order.
+`Track.reverse()` and each direction is computed from its own journey:
 
-> A return service whose timetable is not the mirror image of the outbound one needs a
-> journey file of its own. Point `journeyId` at it and leave `roundTrip` off.
+```json
+"journeys": {"forward": "CH_Journeys_S4_RW_SA", "reverse": "CH_Journeys_S4_SA_RW"}
+```
+
+A return service is a timetable of its own, not the mirror image of the outbound one - the
+S4 takes 6594 s of running time one way and 6612 s the other, distributed differently over
+the legs - so there is no way to derive one direction from the other. `journeyFromTimetable.py`
+writes both, the return one with its positions already mirrored on the track length, ready
+for the reversed track. Each section records the `journeyId` it was computed from.
 
 Sections are numbered along the trip and carry the direction they belong to:
 
@@ -109,8 +155,9 @@ index  name        direction  distanceOffset [m]
 ```
 
 `distanceOffset [m]` is the distance covered before a section starts, which lays the whole
-trip out on one continuous axis. The return legs mirror the outbound ones, so `reverse 0`
-covers the same stretch of line as `forward 3`.
+trip out on one continuous axis. The return trip runs back over the same line, so `reverse 0`
+covers the same stretch of it as `forward 3` - at its own timetable, not the outbound one
+read backwards.
 
 ### Repeated runs
 
@@ -189,6 +236,29 @@ section, with positions relative to its start. Keeping the breakpoints rather th
 them onto the discretization points means the steps are drawn exactly where the limit
 changes. The dashboard offers them as `Speed limit [km/h]` and the braking curves as
 `ETCS braking curve [km/h]`, both drawn as dashed steps over the velocity.
+
+### Tunnels
+
+Both wrappers record the stretches a section runs in a tunnel, per journey section, in
+`metadata.json`:
+
+```json
+"tunnels": [
+    {"start [m]": 899.0, "end [m]": 9499.0, "cross section [m^2]": 26.0}
+]
+```
+
+The cross sections of a track are a step function, infinite on open track, so a stretch of
+tunnel is a step with a finite cross section. They are taken off the track as the run
+prepared it - cropped to the section, reversed for a return trip and adapted to the train
+length - so the positions are in the same frame as the trajectory, and a run computed with
+`tunnelsInOcp = False` records none.
+
+"Shade tunnels" in the sidebar draws them as light gray bands behind every chart. The band
+ends are mapped onto whichever axis is plotted through the trajectory itself, so on a time
+axis they become the stretches of time the train spends inside; the tooltip gives the length
+and the cross section. Runs computed before the tunnels were recorded carry none and are
+drawn without shading.
 
 ## Simulations
 

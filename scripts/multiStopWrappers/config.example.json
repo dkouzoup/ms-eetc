@@ -1,8 +1,12 @@
 {
     "directory": "../../test",
     "stationDict": "stationDict.csv",
+    "timetable": "timetable01.json",
     "trainId": "train01",
     "trackId": "track01",
-    "journeyId": "journey01",
+    "journeys": {
+        "forward": "journey01_A_B",
+        "reverse": "journey01_B_A"
+    },
     "lossesFile": "losses.txt"
 }

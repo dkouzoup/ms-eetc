@@ -17,6 +17,13 @@ def loadConfig():
     Copy config.example.json to config.json and adapt it to your setup.
 
     The keys in DIRECTORY_KEYS default to the value of "directory" if not given.
+
+    "journeys" holds one journey id per direction of the trip:
+
+        "journeys": {"forward": "..._RW_SA", "reverse": "..._SA_RW"}
+
+    "timetable" names the timetable extract that journeyFromTimetable.py builds the
+    journey files from, relative to "directory".
     """
 
     configPath = Path(__file__).parent / CONFIG_FILE
