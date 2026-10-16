@@ -8,6 +8,13 @@ from mseetc.train import Train, TrainIntegrator
 from mseetc.utils import computeTunnelFactor, get_power_loss_function
 
 
+# How far the estimated velocity may miss the target velocity of an interval when the force the
+# target asks for lies outside the force envelope of the train [m/s]. Sized to absorb the solver
+# tolerance of a planned trajectory that rides on a force limit, and nothing more: 1e-4 m/s is
+# 0.36 mm/s, four orders of magnitude below the resolution any speed profile is stated in.
+SATURATION_TOLERANCE = 1e-4
+
+
 class forceEstimator():
 
     def __init__(self, df, train, track, optsDict={}, trainLengthDependentValues=False, plotInterpolation=False):
@@ -199,8 +206,28 @@ class forceEstimator():
 
         if errorLower * errorUpper > 0:
 
+            # The target asks for a force outside what the train has on this interval, so the
+            # closest it can get is the bound it asks to pass. Where the profile rides on a force
+            # limit - the braking curve into a stop, planned at maximum deceleration - the force
+            # that reproduces it lands a solver tolerance beyond the limit rather than on it, and
+            # saturating is then the same trajectory to within that tolerance. A target that misses
+            # by more than SATURATION_TOLERANCE is one the train genuinely cannot hold, and an
+            # estimate that quietly carried that error forward would no longer describe the target.
+
+            if abs(errorLower) <= abs(errorUpper):
+
+                force, tSaturated, velocitySaturated, error = lower, tLower, velocityLower, errorLower
+
+            else:
+
+                force, tSaturated, velocitySaturated, error = upper, tUpper, velocityUpper, errorUpper
+
+            if abs(error) <= SATURATION_TOLERANCE:
+
+                return force, tSaturated, velocitySaturated
+
             raise ValueError(
-                "Bisection requires a sign change in interval {}! "
+                "Target velocity out of reach in interval {}! "
                 "Target velocity is {:.6f} m/s, "
                 "Fel={} gives {:.6f} m/s and Fel={} gives {:.6f} m/s.".format(i, targetVelocity, lower, velocityLower, upper, velocityUpper)
             )
@@ -452,15 +479,18 @@ class energyEstimator():
 
                     energyLossesTr, energyLossesRgb = self.trainIntegrator.calcLosses(self.velocities[i], self.times[i+1] - self.times[i], 0, self.forcesEl[i], self.forcesPnb[i], grad, gradLinearTerm, curv, curvLinearTerm, tunnelFactor)
 
+                    # the losses come integrated over the interval already, an energy rather than a force
+                    energyLossesTr, energyLossesRgb = float(energyLossesTr), float(energyLossesRgb)
+
                     if self.forcesEl[i] > 0:
 
                         driveTrainLosses += energyLossesTr
-                        usedEnergy = self.ds[i] * (self.forcesEl[i] + energyLossesTr)
+                        usedEnergy += self.ds[i] * self.forcesEl[i] + energyLossesTr
 
                     else:
 
                         driveTrainLosses += energyLossesRgb
-                        regeneratedEnergy = self.ds[i] * -self.forcesEl[i] - energyLossesRgb
+                        regeneratedEnergy += self.ds[i] * -self.forcesEl[i] - energyLossesRgb
 
 
         driveTrainLosses = driveTrainLosses * self.totalMass  / 3.6e6  # [kWh]
