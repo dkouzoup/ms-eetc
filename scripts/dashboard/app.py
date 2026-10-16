@@ -40,6 +40,11 @@ ENERGY_COLUMNS = ['Energy SIM [kWh]', 'Energy OCP [kWh]', 'Net energy used [kWh]
     'Used energy [kWh]', 'Regenerated energy [kWh]', 'Drive train losses [kWh]',
     'Mechanical losses [kWh]']
 
+# the two energies a cost is made of, priced apart since recuperation may be paid less
+USED_ENERGY, REGENERATED_ENERGY = 'Used energy [kWh]', 'Regenerated energy [kWh]'
+
+DEFAULT_PRICE = 0.14  # [CHF/kWh]
+
 
 def defaultSearchRoot():
     "Start from the data directory of the wrapper configuration, if there is one."
@@ -137,6 +142,48 @@ def speedLimitSeries(section, df):
         velocities = np.append(velocities, velocities[-1])
 
     return np.interp(positions, df['Position [m]'], sig.evaluateXAxis(xAxis, df)), velocities
+
+
+def tunnelBands(section, df):
+
+    """
+    Stretches of a section that run in a tunnel, placed on the x-axis currently plotted.
+
+    The tunnels are recorded by the wrappers in the coordinates of the trajectory, so
+    their ends are mapped onto the chosen axis through the trajectory itself, the same
+    way the speed limits are. On a time axis that turns them into the stretches of time
+    the train spends inside, which is why the mapping is worth going through.
+    """
+
+    if not section.tunnels:
+
+        return None
+
+    positions = np.array([[tunnel['start [m]'], tunnel['end [m]']] for tunnel in section.tunnels])
+    areas = np.array([tunnel['cross section [m^2]'] for tunnel in section.tunnels])
+
+    # the estimator records the tunnels of the whole track, so keep the ones this section
+    # actually runs through; interpolating the others would collapse them onto its ends
+    covered = df['Position [m]'].values
+
+    inside = (positions[:, 1] > covered[0]) & (positions[:, 0] < covered[-1])
+
+    positions, areas = positions[inside], areas[inside]
+
+    if not len(positions):
+
+        return None
+
+    x = np.interp(positions, covered, sig.evaluateXAxis(xAxis, df))
+
+    return pd.DataFrame({
+        'x1': x[:, 0],
+        'x2': x[:, 1],
+        # the part of the tunnel inside the section, which is all of it unless it straddles an end
+        'Length [m]': np.minimum(positions[:, 1], covered[-1]) - np.maximum(positions[:, 0], covered[0]),
+        'Cross section [m^2]': areas,
+        'Section': sectionLabel(section),
+    })
 
 
 def flatten(value, prefix=''):
@@ -246,6 +293,16 @@ def availableEnergyColumns(runs):
     return [column for column in ENERGY_COLUMNS if any(energyPerSection(run, column) for run in runs)]
 
 
+def costPerSection(run, priceConsumption, priceRecuperation):
+    "Cost of every section of a run in CHF: the energy drawn, less the energy fed back."
+
+    used = energyPerSection(run, USED_ENERGY)
+    regenerated = energyPerSection(run, REGENERATED_ENERGY)
+
+    return {idx: priceConsumption*used[idx] - priceRecuperation*regenerated[idx]
+        for idx in used if idx in regenerated}
+
+
 def relativeDifference(value, reference):
     "Difference in percent of the reference, which may be negative (recuperating sections)."
 
@@ -353,6 +410,10 @@ showLimits = st.sidebar.multiselect('Overlay on velocity', sig.LIMIT_SIGNALS,
          'track, adapted to the train length; the ETCS braking curves are what the '
          'trajectory is actually constrained with when they are enabled.')
 
+showTunnels = st.sidebar.checkbox('Shade tunnels', value=True,
+    help='Shade the stretches that run in a tunnel behind every chart. They come from the '
+         'track as the run saw it, so a run computed without tunnel resistance shades none.')
+
 combineSections = st.sidebar.checkbox('All sections in one chart',
     value=xAxis.startswith(('Distance traveled', 'Position (track)')),
     help='Only meaningful on an axis spanning the whole trip, where sections do not overlap.')
@@ -452,7 +513,51 @@ def collectData():
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def lineChart(data, signalName, xRange=None):
+def collectTunnels():
+    "Tunnel stretches of every selected section, on the x-axis currently plotted."
+
+    frames = []
+    done = set()
+
+    for run in selectedRuns:
+
+        for section in run.sections:
+
+            label = sectionLabel(section)
+
+            if not section.hasTrajectory or label not in selectedSections or label in done:
+
+                continue  # the tunnels are a property of the track, shared by the runs
+
+            df = trajectoryOf(section)
+
+            if xAxis not in sig.availableXAxes(df):
+
+                continue
+
+            bands = tunnelBands(section, df)
+
+            if bands is not None and not bands.empty:
+
+                # a section is only settled once a run reports tunnels for it, so comparing a
+                # run planned without them against one planned with them still shades the track
+                done.add(label)
+                frames.append(bands)
+
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+def tunnelsOf(tunnels, data):
+    "The tunnel stretches belonging to the sections a chart draws."
+
+    if tunnels.empty:
+
+        return tunnels
+
+    return tunnels[tunnels['Section'].isin(data['Section'].unique())]
+
+
+def lineChart(data, signalName, xRange=None, bands=None):
 
     """
     One signal against the current x-axis.
@@ -483,6 +588,19 @@ def lineChart(data, signalName, xRange=None):
     trajectories = data[~isLimit]
 
     chart = alt.Chart(trajectories).mark_line(interpolate=interpolate, clip=True).encode(**encoding)
+
+    if bands is not None and not bands.empty:
+
+        # behind the trajectory, so that the profile stays the thing one reads
+        shading = alt.Chart(bands).mark_rect(color='gray', opacity=0.15, clip=True).encode(
+            x=alt.X('x1:Q', title=xAxis, scale=scale),
+            x2=alt.X2('x2:Q'),
+            tooltip=[alt.Tooltip('Section:N'),
+                alt.Tooltip('Length [m]:Q', title='Tunnel length [m]', format='.0f'),
+                alt.Tooltip('Cross section [m^2]:Q', format='.0f')],
+        )
+
+        chart = shading + chart
 
     if not limits.empty:
 
@@ -571,6 +689,14 @@ with trajectoriesTab:
 
     data = collectData()
 
+    tunnels = collectTunnels() if showTunnels else pd.DataFrame()
+
+    if showTunnels and tunnels.empty and any(
+            section.tunnels is None for run in selectedRuns for section in run.sections):
+
+        st.caption('Runs computed before the tunnels were recorded carry none, so nothing is '
+            'shaded; re-run the wrappers to get them.')
+
     if data.empty:
 
         st.info('Nothing to plot: select at least one signal and one section.')
@@ -606,14 +732,17 @@ with trajectoriesTab:
 
             if combineSections:
 
-                showChart(lineChart(signalData, name, xRange), f"chart-{name}")
+                showChart(lineChart(signalData, name, xRange, tunnelsOf(tunnels, signalData)),
+                    f"chart-{name}")
 
             else:
 
                 for label in sorted(signalData['Section'].unique()):
 
+                    sectionData = signalData[signalData['Section'] == label]
+
                     st.caption(f"Section {label}")
-                    showChart(lineChart(signalData[signalData['Section'] == label], name, xRange),
+                    showChart(lineChart(sectionData, name, xRange, tunnelsOf(tunnels, sectionData)),
                         f"chart-{name}-{label}")
 
 with energyTab:
@@ -642,7 +771,16 @@ with energyTab:
         baseline = runsByName[baselineName]
         others = [run for run in selectedRuns if run.name != baselineName]
 
+        consumption, recuperation = st.columns(2)
+
+        priceConsumption = consumption.number_input('Consumption price [CHF/kWh]', min_value=0.0,
+            value=DEFAULT_PRICE, step=0.01, format='%.3f', help='Paid for the energy drawn.')
+
+        priceRecuperation = recuperation.number_input('Recuperation price [CHF/kWh]', min_value=0.0,
+            value=DEFAULT_PRICE, step=0.01, format='%.3f', help='Credited for the energy fed back.')
+
         energies = {run.name: energyPerSection(run, column) for run in selectedRuns}
+        costs = {run.name: costPerSection(run, priceConsumption, priceRecuperation) for run in selectedRuns}
 
         # sections of the sidebar selection, labeled by the reference run where possible
         labels = {}
@@ -664,15 +802,45 @@ with energyTab:
         else:
 
             # totals are only comparable over the sections that every run has in common
-            common = [idx for idx in indices if all(idx in energies[run.name] for run in selectedRuns)]
-            totals = {run.name: sum(energies[run.name][idx] for idx in common) for run in selectedRuns}
+            def commonSections(values):
 
-            def deltaColumns(run):
+                return [idx for idx in indices if all(idx in values[run.name] for run in selectedRuns)]
+
+            common, costCommon = commonSections(energies), commonSections(costs)
+
+            totals = {run.name: sum(energies[run.name][idx] for idx in common) for run in selectedRuns}
+            costTotals = {run.name: sum(costs[run.name][idx] for idx in costCommon) for run in selectedRuns}
+
+            def deltaColumns(run, unit):
                 "Header names of the difference columns, kept short when there is only one."
 
                 suffix = '' if len(others) == 1 else f" {names[run.name]}"
 
-                return f"Δ{suffix} [kWh]", f"Δ{suffix} [%]"
+                return f"Δ{suffix} [{unit}]", f"Δ{suffix} [% {unit}]"
+
+            def totalCards(totals, unit):
+                "One card per run, the others as a difference to the reference."
+
+                cards = st.columns(len(selectedRuns))
+
+                cards[0].metric(names[baselineName], f"{totals[baselineName]:.2f} {unit}",
+                    help='Reference run')
+
+                for card, run in zip(cards[1:], others):
+
+                    difference = totals[run.name] - totals[baselineName]
+                    percent = relativeDifference(totals[run.name], totals[baselineName])
+
+                    card.metric(names[run.name], f"{totals[run.name]:.2f} {unit}",
+                        delta=f"{difference:+.2f} {unit}" + (f"  ({percent:+.1f} %)" if percent is not None else ''),
+                        delta_color='inverse')  # spending more is not an improvement
+
+            def excludedCaption(sections, what):
+
+                if len(sections) < len(indices):
+
+                    skipped = [f"{idx}: {labels[idx]}" for idx in indices if idx not in sections]
+                    st.caption(f"Excluded from the {what}, as not every run has them: " + ', '.join(skipped))
 
             ### totals, at a glance
 
@@ -686,24 +854,24 @@ with energyTab:
 
                 st.subheader(f"Total over {len(common)} section(s)")
 
-                cards = st.columns(len(selectedRuns))
+                totalCards(totals, 'kWh')
+                excludedCaption(common, 'totals')
 
-                cards[0].metric(names[baselineName], f"{totals[baselineName]:.2f} kWh",
-                    help='Reference run')
+            st.subheader('Cost' + (f" over {len(costCommon)} section(s)" if costCommon and costCommon != common else ''))
 
-                for card, run in zip(cards[1:], others):
+            if not costCommon:
 
-                    difference = totals[run.name] - totals[baselineName]
-                    percent = relativeDifference(totals[run.name], totals[baselineName])
+                st.warning('The selected runs have no section in common that reports used and '
+                    'regenerated energy apart, which the cost needs. Re-run the wrappers to record them.')
 
-                    card.metric(names[run.name], f"{totals[run.name]:.2f} kWh",
-                        delta=f"{difference:+.2f} kWh" + (f"  ({percent:+.1f} %)" if percent is not None else ''),
-                        delta_color='inverse')  # spending more energy is not an improvement
+            else:
 
-                if len(common) < len(indices):
+                totalCards(costTotals, 'CHF')
 
-                    skipped = [f"{idx}: {labels[idx]}" for idx in indices if idx not in common]
-                    st.caption('Excluded from the totals, as not every run has them: ' + ', '.join(skipped))
+                st.caption(f"{priceConsumption:.3f} CHF/kWh × used energy − {priceRecuperation:.3f} "
+                    'CHF/kWh × regenerated energy, as simulated (Energy SIM) for optimized runs.')
+
+                excludedCaption(costCommon, 'cost')
 
             ### per section
 
@@ -718,31 +886,37 @@ with energyTab:
                 if isTotal:
 
                     row = {'Section': f"Total ({len(common)} sections)"}
-                    valueOf = lambda run: totals[run.name]
+                    energyOf = lambda run: totals[run.name]
+                    # only when it sums the same sections as the energy total next to it
+                    costOf = lambda run: costTotals[run.name] if costCommon == common else None
 
                 else:
 
                     row = {'Section': f"{idx}: {labels[idx]}"}
-                    valueOf = lambda run: energies[run.name].get(idx)
+                    energyOf = lambda run: energies[run.name].get(idx)
+                    costOf = lambda run: costs[run.name].get(idx)
 
-                base = valueOf(baseline)
-                row[f"{names[baselineName]} [kWh]"] = base
+                # no cost columns at all when no run can be priced, rather than columns of blanks
+                for valueOf, unit in [(energyOf, 'kWh')] + ([(costOf, 'CHF')] if any(costs.values()) else []):
 
-                for run in others:
+                    base = valueOf(baseline)
+                    row[f"{names[baselineName]} [{unit}]"] = base
 
-                    value = valueOf(run)
-                    deltaColumn, percentColumn = deltaColumns(run)
+                    for run in others:
 
-                    row[f"{names[run.name]} [kWh]"] = value
-                    row[deltaColumn] = value - base if isValue(value) and isValue(base) else None
-                    row[percentColumn] = relativeDifference(value, base)
+                        value = valueOf(run)
+                        deltaColumn, percentColumn = deltaColumns(run, unit)
+
+                        row[f"{names[run.name]} [{unit}]"] = value
+                        row[deltaColumn] = value - base if isValue(value) and isValue(base) else None
+                        row[percentColumn] = relativeDifference(value, base)
 
                 rows.append(row)
 
             energy = pd.DataFrame(rows)
 
             st.dataframe(energy, width='stretch', hide_index=True, column_config={
-                name: st.column_config.NumberColumn(format='%.2f' if '[kWh]' in name else '%+.1f')
+                name: st.column_config.NumberColumn(format='%+.1f' if '[%' in name else '%.2f')
                 for name in energy.columns if name != 'Section'})
 
             ### differences per section

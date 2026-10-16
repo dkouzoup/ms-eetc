@@ -38,6 +38,7 @@ class Section:
     direction: str = None  # 'forward' or 'reverse' for a round trip, None for a one-way run
     distanceOffset: float = None  # distance covered before this section, along the whole trip
     speedLimits: dict = None  # step function {'Position [m]': [...], 'Speed limit [m/s]': [...]}
+    tunnels: list = None  # stretches run in a tunnel, [{'start [m]', 'end [m]', 'cross section [m^2]'}]
     info: dict = field(default_factory=dict)
 
     @property
@@ -216,6 +217,7 @@ def readSections(path, kind, metadata):
                 direction=entry.get('direction'),
                 distanceOffset=entry.get('distanceOffset [m]'),
                 speedLimits=entry.get('speedLimits'),
+                tunnels=entry.get('tunnels'),
                 info=entry,
             ))
 
